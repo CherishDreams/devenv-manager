@@ -1,8 +1,9 @@
 import { ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Col, Descriptions, Row, Space, Tag, Typography } from "antd";
 import type React from "react";
 import { useMemo } from "react";
 import type { EnvironmentKind, InstallRecord } from "@shared/types";
+import { EnvironmentLogo } from "../components/EnvironmentLogo";
 import { useConfigStore } from "../stores/configStore";
 import { useEnvironmentStore } from "../stores/environmentStore";
 import { useSystemStore } from "../stores/systemStore";
@@ -66,21 +67,37 @@ export default function DashboardPage(): React.ReactElement {
 
           return (
             <Col span={6} key={definition.id}>
-              <Card className="summary-card">
-                <Space direction="vertical" size={10}>
-                  <Space>
-                    <Tag color={envTagColors[definition.id]}>{definition.group}</Tag>
-                    <Typography.Text strong>{definition.name}</Typography.Text>
-                  </Space>
-                  {activeRecord ? (
-                    <>
-                      <Typography.Title level={4}>{activeRecord.version}</Typography.Title>
-                      <Typography.Text type="secondary">{activeRecord.installPath}</Typography.Text>
-                    </>
-                  ) : (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未激活" />
-                  )}
-                </Space>
+              <Card className="summary-card" bodyStyle={{ padding: "20px", height: "100%" }}>
+                <div className="summary-card-content">
+                  <div className="summary-card-header">
+                    <div className="summary-card-header-left">
+                      <Tag color={envTagColors[definition.id]} bordered={false}>{definition.group}</Tag>
+                      <Typography.Text strong style={{ fontSize: 16 }} title={definition.name}>
+                        {definition.name === "nvm-windows" ? "NVM" : definition.name}
+                      </Typography.Text>
+                    </div>
+                    <div className="summary-card-logo-wrapper">
+                      <EnvironmentLogo definition={definition} />
+                    </div>
+                  </div>
+                  
+                  <div className="summary-card-body">
+                    {activeRecord ? (
+                      <div className="summary-card-active">
+                        <Typography.Title level={3} style={{ margin: 0, fontWeight: 600 }}>
+                          {activeRecord.version}
+                        </Typography.Title>
+                        <Typography.Text type="secondary" ellipsis={{ tooltip: activeRecord.installPath }}>
+                          {activeRecord.installPath}
+                        </Typography.Text>
+                      </div>
+                    ) : (
+                      <div className="summary-card-inactive">
+                        <Typography.Text type="secondary" style={{ opacity: 0.8 }}>未安装或未激活</Typography.Text>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </Card>
             </Col>
           );

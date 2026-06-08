@@ -1,5 +1,5 @@
-import { AppstoreOutlined, CloseOutlined, DashboardOutlined, FileTextOutlined, SettingOutlined, ToolOutlined } from "@ant-design/icons";
-import { App as AntdApp, Button, ConfigProvider, Layout, Menu, Spin, Tag, Typography } from "antd";
+import { AppstoreOutlined, CloseOutlined, DashboardOutlined, FileTextOutlined, SettingOutlined, ToolOutlined, BgColorsOutlined } from "@ant-design/icons";
+import { App as AntdApp, Button, ConfigProvider, Layout, Menu, Spin, Tag, Typography, Switch, Tooltip } from "antd";
 import type { MenuProps } from "antd";
 import type React from "react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
@@ -7,6 +7,7 @@ import { useConfigStore } from "./stores/configStore";
 import { useEnvironmentStore } from "./stores/environmentStore";
 import { useSystemStore } from "./stores/systemStore";
 import { useTaskStore } from "./stores/taskStore";
+import { useUiStore } from "./stores/uiStore";
 
 type PageKey = "dashboard" | "installed" | "environments" | "logs";
 
@@ -56,9 +57,19 @@ function renderPage(pageKey: PageKey): React.ReactNode {
 function HeaderStatus(): React.ReactElement {
   const status = useSystemStore((state) => state.status);
   const runningTaskCount = useTaskStore((state) => state.tasks.filter((task) => task.status === "running").length);
+  const { themeStyle, setThemeStyle } = useUiStore();
 
   return (
     <div className="header-status">
+      <Tooltip title="切换炫彩主题">
+        <Switch 
+          checkedChildren={<BgColorsOutlined />}
+          unCheckedChildren={<BgColorsOutlined />}
+          checked={themeStyle === "vibrant"}
+          onChange={(checked) => setThemeStyle(checked ? "vibrant" : "solid")}
+          style={{ marginRight: 8 }}
+        />
+      </Tooltip>
       <Tag color={status?.isWindows ? "blue" : "red"}>{status?.isWindows ? "Windows" : "非 Windows"}</Tag>
       <Tag color={status?.isAdministrator ? "green" : "orange"}>
         {status?.isAdministrator ? "管理员" : "普通权限"}
@@ -104,24 +115,45 @@ export default function App(): React.ReactElement {
 
   const selectedKeys = useMemo(() => [pageKey], [pageKey]);
 
+  const { themeStyle } = useUiStore();
+
+  useEffect(() => {
+    if (themeStyle === "vibrant") {
+      document.body.classList.add("theme-vibrant");
+    } else {
+      document.body.classList.remove("theme-vibrant");
+    }
+  }, [themeStyle]);
+
+  const themeConfig = useMemo(() => {
+    const isVibrant = themeStyle === "vibrant";
+    return {
+      token: {
+        borderRadius: 12, // Increased border radius for premium feel
+        colorPrimary: "#1668dc",
+        fontFamily:
+          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        colorBgContainer: isVibrant ? "rgba(255, 255, 255, 0.4)" : "#ffffff",
+        colorBgElevated: isVibrant ? "rgba(255, 255, 255, 0.8)" : "#ffffff",
+      },
+      components: {
+        Layout: {
+          bodyBg: isVibrant ? "transparent" : "#f5f5f5",
+          siderBg: isVibrant ? "transparent" : "#ffffff",
+          headerBg: isVibrant ? "transparent" : "#ffffff",
+        },
+        Menu: {
+          itemBg: isVibrant ? "transparent" : undefined,
+          subMenuItemBg: isVibrant ? "transparent" : undefined,
+          itemActiveBg: isVibrant ? "rgba(255, 255, 255, 0.5)" : undefined,
+          itemSelectedBg: isVibrant ? "rgba(255, 255, 255, 0.6)" : undefined,
+        },
+      },
+    };
+  }, [themeStyle]);
+
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          borderRadius: 8,
-          colorPrimary: "#1668dc",
-          fontFamily:
-            "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        },
-        components: {
-          Layout: {
-            bodyBg: "#f5f7fb",
-            siderBg: "#ffffff",
-            headerBg: "#ffffff",
-          },
-        },
-      }}
-    >
+    <ConfigProvider theme={themeConfig}>
       <AntdApp>
         <Layout className="app-shell">
           <Layout.Sider className="side-nav" width={228}>
