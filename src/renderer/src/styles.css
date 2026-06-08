@@ -414,6 +414,28 @@ body {
   display: none !important;
 }
 
+.version-select {
+  width: 100%;
+}
+
+.version-select .ant-select-selector {
+  min-height: 44px;
+}
+
+.version-select-popup .ant-select-item-option {
+  min-height: 76px;
+  padding: 10px 12px;
+}
+
+.version-select-popup .ant-select-item-option-content {
+  white-space: normal;
+}
+
+.version-select-option {
+  width: 100%;
+  line-height: 1.4;
+}
+
 .operation-section .ant-alert-message {
   word-break: break-all;
 }

@@ -40,13 +40,25 @@ interface GoRelease {
   }>;
 }
 
+interface ZuluPackage {
+  download_url: string;
+  java_version: number[];
+  name: string;
+}
+
+interface LibericaRelease {
+  downloadUrl: string;
+  filename: string;
+  GA: boolean;
+  packageType: string;
+  version: string;
+}
+
 interface NodeRelease {
   version: string;
   lts: false | string;
   files: string[];
 }
-
-const supportedJavaVendors = new Set(["temurin"]);
 
 function describeFetchError(error: unknown): string {
   const cause = (error as { cause?: { code?: string; message?: string } }).cause;
@@ -93,6 +105,10 @@ function getGoDownloadSource(name: string, baseUrl: string): { name: string; url
     url: `${downloadBaseUrl}/?mode=json&include=all`,
     downloadBaseUrl,
   };
+}
+
+function isPlainZuluPackage(item: ZuluPackage): boolean {
+  return !item.name.includes("-fx-") && !item.name.includes("-crac-");
 }
 
 function psQuote(value: string): string {
@@ -570,7 +586,7 @@ export class InstallerService {
   private async resolveResource(input: InstallTaskInput, config: AppConfig, signal: AbortSignal): Promise<PackageResource> {
     switch (input.environment) {
       case "java":
-        return this.resolveJava(input);
+        return this.resolveJava(input, config, signal);
       case "python":
         return this.resolvePython(input, config);
       case "conda":
@@ -586,19 +602,72 @@ export class InstallerService {
     }
   }
 
-  private resolveJava(input: InstallTaskInput): PackageResource {
+  private async resolveJava(input: InstallTaskInput, config: AppConfig, signal: AbortSignal): Promise<PackageResource> {
     const vendor = input.vendor ?? "temurin";
 
-    if (!supportedJavaVendors.has(vendor)) {
-      throw new Error("当前自动安装暂只支持 Eclipse Temurin。");
+    if (vendor === "temurin") {
+      return {
+        url: `https://api.adoptium.net/v3/binary/latest/${input.version}/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk`,
+        fileName: `temurin-jdk-${input.version}-windows-x64.zip`,
+        packageType: "archive",
+        resolvedVersion: input.version,
+        sourceName: "Adoptium API",
+      };
     }
 
-    return {
-      url: `https://api.adoptium.net/v3/binary/latest/${input.version}/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk`,
-      fileName: `temurin-jdk-${input.version}-windows-x64.zip`,
-      packageType: "archive",
-      resolvedVersion: input.version,
-    };
+    if (vendor === "zulu") {
+      const packages = await fetchJson<ZuluPackage[]>(
+        `https://api.azul.com/metadata/v1/zulu/packages/?java_version=${input.version}&os=windows&arch=x64&java_package_type=jdk&archive_type=zip&release_status=ga&availability_types=CA&page=1&page_size=50`,
+        config,
+        signal,
+      );
+      const selectedPackage = packages.find(isPlainZuluPackage);
+
+      if (!selectedPackage) {
+        throw new Error(`未找到 Zulu JDK ${input.version} 的 Windows x64 zip。`);
+      }
+
+      return {
+        url: selectedPackage.download_url,
+        fileName: selectedPackage.name,
+        packageType: "archive",
+        resolvedVersion: selectedPackage.java_version.join("."),
+        sourceName: "Azul Metadata API",
+      };
+    }
+
+    if (vendor === "liberica") {
+      const releases = await fetchJson<LibericaRelease[]>(
+        `https://api.bell-sw.com/v1/liberica/releases?version-feature=${input.version}&version-modifier=latest&bitness=64&release-type=all&os=windows&arch=x86&package-type=zip&bundle-type=jdk`,
+        config,
+        signal,
+      );
+      const selectedRelease = releases.find((item) => item.GA && item.packageType === "zip");
+
+      if (!selectedRelease) {
+        throw new Error(`未找到 Liberica JDK ${input.version} 的 Windows x64 zip。`);
+      }
+
+      return {
+        url: selectedRelease.downloadUrl,
+        fileName: selectedRelease.filename,
+        packageType: "archive",
+        resolvedVersion: selectedRelease.version,
+        sourceName: "BellSoft Product Discovery API",
+      };
+    }
+
+    if (vendor === "oracle") {
+      return {
+        url: `https://download.oracle.com/java/${input.version}/latest/jdk-${input.version}_windows-x64_bin.zip`,
+        fileName: `oracle-jdk-${input.version}-windows-x64.zip`,
+        packageType: "archive",
+        resolvedVersion: input.version,
+        sourceName: "Oracle Java 下载页",
+      };
+    }
+
+    throw new Error(`暂不支持该 Java 发行商：${vendor}`);
   }
 
   private resolvePython(input: InstallTaskInput, config: AppConfig): PackageResource {
@@ -731,18 +800,26 @@ export class InstallerService {
       configuredMirror && configuredMirror !== "official" ? configuredMirror.replace(/\/+$/, "") : "https://repo.anaconda.com";
 
     if (vendor === "anaconda") {
+      const fileName =
+        input.version === "latest" ? "Anaconda3-latest-Windows-x86_64.exe" : `Anaconda3-${input.version}-Windows-x86_64.exe`;
+
       return {
-        url: `${baseUrl}/archive/Anaconda3-latest-Windows-x86_64.exe`,
-        fileName: "Anaconda3-latest-Windows-x86_64.exe",
+        url: `${baseUrl}/archive/${fileName}`,
+        fileName,
         packageType: "installer",
-        resolvedVersion: "latest",
+        resolvedVersion: input.version,
         sourceName: configuredMirror && configuredMirror !== "official" ? "自定义 Conda 镜像" : "Anaconda 官方源",
       };
     }
 
+    const fileName =
+      input.version === "latest" || /^py\d+$/.test(input.version)
+        ? "Miniconda3-latest-Windows-x86_64.exe"
+        : `Miniconda3-${input.version}-Windows-x86_64.exe`;
+
     return {
-      url: `${baseUrl}/miniconda/Miniconda3-latest-Windows-x86_64.exe`,
-      fileName: "Miniconda3-latest-Windows-x86_64.exe",
+      url: `${baseUrl}/miniconda/${fileName}`,
+      fileName,
       packageType: "installer",
       resolvedVersion: input.version,
       sourceName: configuredMirror && configuredMirror !== "official" ? "自定义 Conda 镜像" : "Anaconda 官方源",

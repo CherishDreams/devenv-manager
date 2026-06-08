@@ -17,6 +17,7 @@ import {
   List,
   Popconfirm,
   Radio,
+  Select,
   Space,
   Steps,
   Table,
@@ -233,7 +234,7 @@ function VendorList({
 
 function VersionOption({ version }: { version: AvailableVersion }): React.ReactElement {
   return (
-    <Space direction="vertical" size={4}>
+    <Space className="version-select-option" direction="vertical" size={4}>
       <Space>
         <Typography.Text strong>{version.label}</Typography.Text>
         <Tag color={version.channel === "lts" ? "green" : "blue"}>{version.channel.toUpperCase()}</Tag>
@@ -244,6 +245,26 @@ function VersionOption({ version }: { version: AvailableVersion }): React.ReactE
       {version.notes ? <Typography.Text type="secondary">{version.notes}</Typography.Text> : null}
     </Space>
   );
+}
+
+interface VersionSelectOption {
+  value: string;
+  label: string;
+  searchText: string;
+  version: AvailableVersion;
+}
+
+function createVersionSelectOption(version: AvailableVersion): VersionSelectOption {
+  return {
+    value: version.id,
+    label: version.label,
+    searchText: [version.label, version.version, version.channel, version.notes].filter(Boolean).join(" ").toLowerCase(),
+    version,
+  };
+}
+
+function filterVersionOption(input: string, option?: VersionSelectOption): boolean {
+  return option?.searchText.includes(input.trim().toLowerCase()) ?? false;
 }
 
 function getSuggestedInstallPath(
@@ -307,6 +328,8 @@ function OperationArea({ definition }: { definition: EnvironmentDefinition }): R
     () => versions.find((version) => version.id === selectedVersionId),
     [selectedVersionId, versions],
   );
+
+  const versionSelectOptions = useMemo(() => versions.map(createVersionSelectOption), [versions]);
 
   const suggestedInstallPath = useMemo(
     () => getSuggestedInstallPath(config?.globalInstallDir ?? "E:\\dev_env", definition, selectedVendorId, selectedVersion),
@@ -395,17 +418,21 @@ function OperationArea({ definition }: { definition: EnvironmentDefinition }): R
             {error ? <Alert type="error" showIcon message={error} /> : null}
 
             {versions.length > 0 ? (
-              <Radio.Group
-                className="version-options"
+              <Select<string, VersionSelectOption>
+                className="version-select"
+                popupClassName="version-select-popup"
+                showSearch
+                allowClear
                 value={selectedVersionId}
-                onChange={(event) => setSelectedVersionId(event.target.value as string)}
-              >
-                {versions.map((version) => (
-                  <Radio.Button key={version.id} value={version.id} className="version-option">
-                    <VersionOption version={version} />
-                  </Radio.Button>
-                ))}
-              </Radio.Group>
+                options={versionSelectOptions}
+                loading={loading}
+                placeholder="选择版本"
+                optionFilterProp="searchText"
+                filterOption={filterVersionOption}
+                optionRender={(option) => <VersionOption version={option.data.version} />}
+                onChange={(value) => setSelectedVersionId(value)}
+                onClear={() => setSelectedVersionId(undefined)}
+              />
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loading ? "正在获取版本" : "暂无版本数据"} />
             )}

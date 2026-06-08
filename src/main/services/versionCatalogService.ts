@@ -9,6 +9,23 @@ interface AdoptiumAvailableReleases {
   most_recent_feature_release: number;
 }
 
+interface ZuluPackage {
+  download_url: string;
+  java_version: number[];
+  latest?: boolean;
+  name: string;
+}
+
+interface LibericaRelease {
+  downloadUrl: string;
+  featureVersion: number;
+  filename: string;
+  GA: boolean;
+  LTS: boolean;
+  packageType: string;
+  version: string;
+}
+
 interface GoRelease {
   version: string;
   stable?: boolean;
@@ -36,6 +53,8 @@ interface GitHubRelease {
 }
 
 const requestTimeoutMs = 20_000;
+const maxVersionOptions = 40;
+const javaMajorCandidates = Array.from({ length: 27 }, (_, index) => 30 - index);
 
 function createVersion(
   environment: EnvironmentKind,
@@ -78,6 +97,10 @@ function compareVersionsDesc(left: string, right: string): number {
 
 function unique<TValue>(values: TValue[]): TValue[] {
   return Array.from(new Set(values));
+}
+
+function isPlainZuluPackage(item: ZuluPackage): boolean {
+  return !item.name.includes("-fx-") && !item.name.includes("-crac-");
 }
 
 function getProxyUrl(url: string, config: AppConfig): string | undefined {
@@ -185,21 +208,53 @@ export class VersionCatalogService {
   async listVersions(query: VersionCatalogQuery): Promise<AvailableVersion[]> {
     const config = await this.configService.get();
 
+    try {
+      return await this.listOnlineVersions(query, config);
+    } catch (error) {
+      const fallbackVersions = getStaticVersions(query);
+
+      if (fallbackVersions.length === 0) {
+        throw error;
+      }
+
+      return fallbackVersions.map((version) => ({
+        ...version,
+        notes: `在线获取失败，已使用内置目录：${(error as Error).message}`,
+      }));
+    }
+  }
+
+  private listOnlineVersions(query: VersionCatalogQuery, config: AppConfig): Promise<AvailableVersion[]> {
     switch (query.environment) {
       case "java":
-        return query.vendor === "temurin" ? this.listTemurinVersions(config) : getStaticVersions(query);
+        return this.listJavaVersions(query, config);
       case "python":
-        return query.vendor === "cpython" ? this.listPythonVersions(config) : getStaticVersions(query);
+        return query.vendor === "cpython" ? this.listPythonVersions(config) : Promise.resolve(getStaticVersions(query));
       case "conda":
         return this.listCondaVersions(query, config);
       case "go":
-        return query.vendor === "golang" ? this.listGoVersions(config) : getStaticVersions(query);
+        return query.vendor === "golang" ? this.listGoVersions(config) : Promise.resolve(getStaticVersions(query));
       case "node":
-        return query.vendor === "nodejs" ? this.listNodeVersions(config) : getStaticVersions(query);
+        return query.vendor === "nodejs" ? this.listNodeVersions(config) : Promise.resolve(getStaticVersions(query));
       case "nvm":
-        return query.vendor === "coreybutler" ? this.listNvmVersions(config) : getStaticVersions(query);
+        return query.vendor === "coreybutler" ? this.listNvmVersions(config) : Promise.resolve(getStaticVersions(query));
       case "maven":
-        return query.vendor === "apache" ? this.listMavenVersions(config) : getStaticVersions(query);
+        return query.vendor === "apache" ? this.listMavenVersions(config) : Promise.resolve(getStaticVersions(query));
+    }
+  }
+
+  private listJavaVersions(query: VersionCatalogQuery, config: AppConfig): Promise<AvailableVersion[]> {
+    switch (query.vendor) {
+      case "temurin":
+        return this.listTemurinVersions(config);
+      case "zulu":
+        return this.listZuluVersions(config);
+      case "liberica":
+        return this.listLibericaVersions(config);
+      case "oracle":
+        return this.listOracleVersions(config);
+      default:
+        return Promise.resolve(getStaticVersions(query));
     }
   }
 
@@ -209,20 +264,105 @@ export class VersionCatalogService {
       config,
     );
     const ltsReleases = new Set(releases.available_lts_releases);
-    const majors = unique([
-      releases.most_recent_feature_release,
-      ...releases.available_lts_releases.slice().sort((left, right) => right - left),
-    ]).filter((major) => releases.available_releases.includes(major));
+    const majors = unique(releases.available_releases.slice().sort((left, right) => right - left));
 
-    return majors.slice(0, 6).map((major) =>
+    return majors.slice(0, maxVersionOptions).map((major) =>
       createVersion(
         "java",
         "temurin",
         String(major),
         `JDK ${major}${ltsReleases.has(major) ? " LTS" : ""}`,
-        ltsReleases.has(major) ? "lts" : "current",
+        major === releases.most_recent_feature_release ? "current" : ltsReleases.has(major) ? "lts" : "stable",
         "archive",
         "来自 Adoptium 在线版本接口",
+      ),
+    );
+  }
+
+  private async listZuluVersions(config: AppConfig): Promise<AvailableVersion[]> {
+    const packages = await fetchJson<ZuluPackage[]>(
+      "https://api.azul.com/metadata/v1/zulu/packages/?os=windows&arch=x64&java_package_type=jdk&archive_type=zip&release_status=ga&availability_types=CA&page=1&page_size=1000",
+      config,
+    );
+    const latestByMajor = new Map<number, ZuluPackage>();
+
+    packages.filter(isPlainZuluPackage).forEach((item) => {
+      const major = item.java_version[0];
+
+      if (!latestByMajor.has(major)) {
+        latestByMajor.set(major, item);
+      }
+    });
+
+    return Array.from(latestByMajor.entries())
+      .sort(([left], [right]) => right - left)
+      .slice(0, maxVersionOptions)
+      .map(([major, item], index) =>
+        createVersion(
+          "java",
+          "zulu",
+          String(major),
+          `Zulu JDK ${major}`,
+          [21, 17, 11, 8].includes(major) ? "lts" : index === 0 ? "current" : "stable",
+          "archive",
+          `最新补丁版本 ${item.java_version.join(".")}，来自 Azul Metadata API`,
+        ),
+      );
+  }
+
+  private async listLibericaVersions(config: AppConfig): Promise<AvailableVersion[]> {
+    const releases = (
+      await Promise.all(
+        javaMajorCandidates.map(async (major) => {
+          try {
+            const result = await fetchJson<LibericaRelease[]>(
+              `https://api.bell-sw.com/v1/liberica/releases?version-feature=${major}&version-modifier=latest&bitness=64&release-type=all&os=windows&arch=x86&package-type=zip&bundle-type=jdk`,
+              config,
+            );
+            return result.find((item) => item.GA && item.packageType === "zip");
+          } catch {
+            return undefined;
+          }
+        }),
+      )
+    ).filter((item): item is LibericaRelease => Boolean(item));
+
+    return releases
+      .sort((left, right) => right.featureVersion - left.featureVersion)
+      .slice(0, maxVersionOptions)
+      .map((release, index) =>
+        createVersion(
+          "java",
+          "liberica",
+          String(release.featureVersion),
+          `Liberica JDK ${release.featureVersion}`,
+          release.LTS ? "lts" : index === 0 ? "current" : "stable",
+          "archive",
+          `最新补丁版本 ${release.version}，来自 BellSoft Product Discovery API`,
+        ),
+      );
+  }
+
+  private async listOracleVersions(config: AppConfig): Promise<AvailableVersion[]> {
+    const page = await fetchText("https://www.oracle.com/java/technologies/downloads/", config);
+    const majors = unique(
+      Array.from(
+        page.matchAll(/https:\/\/download\.oracle\.com\/java\/(\d+)\/latest\/jdk-\1_windows-x64_bin\.zip/g),
+        (match) => Number.parseInt(match[1], 10),
+      ),
+    )
+      .filter((major) => !Number.isNaN(major))
+      .sort((left, right) => right - left);
+
+    return majors.slice(0, maxVersionOptions).map((major, index) =>
+      createVersion(
+        "java",
+        "oracle",
+        String(major),
+        `Oracle JDK ${major}`,
+        [21, 17, 11, 8].includes(major) ? "lts" : index === 0 ? "current" : "stable",
+        "archive",
+        "来自 Oracle Java 下载页",
       ),
     );
   }
@@ -235,9 +375,17 @@ export class VersionCatalogService {
         version.startsWith("3."),
       ),
     ).sort(compareVersionsDesc);
-    const series = ["3.14", "3.13", "3.12", "3.11"];
-    const selectedVersions = series.flatMap((prefix) => versions.find((version) => version.startsWith(`${prefix}.`)) ?? []);
-    const fallbackVersions = versions.slice(0, 4);
+    const latestPatchBySeries = versions.reduce<Map<string, string>>((latestVersions, version) => {
+      const series = version.split(".").slice(0, 2).join(".");
+
+      if (!latestVersions.has(series)) {
+        latestVersions.set(series, version);
+      }
+
+      return latestVersions;
+    }, new Map());
+    const selectedVersions = Array.from(latestPatchBySeries.values()).slice(0, maxVersionOptions);
+    const fallbackVersions = versions.slice(0, maxVersionOptions);
 
     return (selectedVersions.length > 0 ? selectedVersions : fallbackVersions).map((version, index) =>
       createVersion(
@@ -257,39 +405,41 @@ export class VersionCatalogService {
 
     if (query.vendor === "anaconda") {
       const listing = await fetchText(`${baseUrl}/archive/`, config);
-      const version = Array.from(
-        listing.matchAll(/Anaconda3-(\d{4}\.\d+(?:-\d+)?)-Windows-x86_64\.exe/g),
-        (match) => match[1],
-      ).at(-1);
+      const versions = unique(
+        Array.from(
+          listing.matchAll(/Anaconda3-(\d{4}\.\d+(?:-\d+)?)-Windows-x86_64\.exe/g),
+          (match) => match[1],
+        ),
+      ).sort(compareVersionsDesc);
 
-      return [
+      return (versions.length > 0 ? versions.slice(0, maxVersionOptions) : ["latest"]).map((version) =>
         createVersion(
           "conda",
           "anaconda",
-          version ?? "latest",
-          version ? `Anaconda ${version}` : "Anaconda Distribution",
+          version,
+          version === "latest" ? "Anaconda Distribution" : `Anaconda ${version}`,
           "stable",
           "installer",
           "来自 Anaconda archive 目录",
         ),
-      ];
+      );
     }
 
     if (query.vendor === "miniconda") {
       const listing = await fetchText(`${baseUrl}/miniconda/`, config);
       const versions = unique(
         Array.from(
-          listing.matchAll(/Miniconda3-(py\d+)_\d+\.\d+\.\d+(?:-\d+)?-Windows-x86_64\.exe/g),
+          listing.matchAll(/Miniconda3-(py\d+_\d+\.\d+\.\d+(?:-\d+)?)-Windows-x86_64\.exe/g),
           (match) => match[1],
         ),
-      ).sort((left, right) => right.localeCompare(left));
+      ).sort(compareVersionsDesc);
 
-      return (versions.length > 0 ? versions.slice(0, 3) : ["latest"]).map((version) =>
+      return (versions.length > 0 ? versions.slice(0, maxVersionOptions) : ["latest"]).map((version) =>
         createVersion(
           "conda",
           "miniconda",
           version,
-          version === "latest" ? "Miniconda 最新版" : `Miniconda ${version.replace(/^py/, "Python ")}`,
+          version === "latest" ? "Miniconda 最新版" : `Miniconda ${version}`,
           "stable",
           "installer",
           "来自 Anaconda miniconda 目录",
@@ -321,7 +471,7 @@ export class VersionCatalogService {
         .map((release) => release.version.replace(/^go/, "").split(".").slice(0, 2).join(".")),
     );
 
-    return minorVersions.slice(0, 5).map((version) =>
+    return minorVersions.slice(0, maxVersionOptions).map((version) =>
       createVersion("go", "golang", version, `Go ${version}`, "stable", "archive", "来自 Go 在线发布目录"),
     );
   }
@@ -342,7 +492,7 @@ export class VersionCatalogService {
       });
 
     return Array.from(latestByMajor.entries())
-      .slice(0, 6)
+      .slice(0, maxVersionOptions)
       .map(([major, release], index) =>
         createVersion(
           "node",
@@ -362,14 +512,14 @@ export class VersionCatalogService {
     }
 
     const releases = await fetchJson<GitHubRelease[]>(
-      "https://api.github.com/repos/coreybutler/nvm-windows/releases?per_page=10",
+      "https://api.github.com/repos/coreybutler/nvm-windows/releases?per_page=30",
       config,
     );
 
     return releases
       .filter((release) => !release.draft && !release.prerelease)
       .filter((release) => release.assets.some((asset) => asset.name === "nvm-noinstall.zip"))
-      .slice(0, 5)
+      .slice(0, maxVersionOptions)
       .map((release) => {
         const version = release.tag_name.replace(/^v/, "");
         return createVersion(
@@ -391,7 +541,7 @@ export class VersionCatalogService {
     );
     const versions = Array.from(metadata.matchAll(/<version>(3\.\d+\.\d+)<\/version>/g), (match) => match[1])
       .sort(compareVersionsDesc)
-      .slice(0, 6);
+      .slice(0, maxVersionOptions);
 
     return versions.map((version) =>
       createVersion("maven", "apache", version, `Maven ${version}`, "stable", "archive", "来自 Maven Central metadata"),
