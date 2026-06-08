@@ -1,0 +1,12 @@
+node_modules
+dist
+out
+release
+.codegraph
+.vite
+coverage
+.env
+.env.*
+*.log
+.DS_Store
+pnpm-debug.log*
