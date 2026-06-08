@@ -9,9 +9,12 @@ import { useSystemStore } from "../stores/systemStore";
 
 const envTagColors: Record<EnvironmentKind, string> = {
   java: "volcano",
-  go: "cyan",
-  maven: "purple",
+  python: "blue",
   conda: "green",
+  go: "cyan",
+  node: "green",
+  nvm: "lime",
+  maven: "purple",
 };
 
 export default function DashboardPage(): React.ReactElement {

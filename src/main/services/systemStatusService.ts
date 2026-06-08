@@ -20,14 +20,29 @@ async function isWindowsAdministrator(): Promise<boolean> {
 }
 
 export class SystemStatusService {
+  isAdministrator(): Promise<boolean> {
+    return isWindowsAdministrator();
+  }
+
   async getStatus(): Promise<SystemStatus> {
-    const keys = ["JAVA_HOME", "GOROOT", "MAVEN_HOME", "CONDA_HOME", "Path", "PATH"];
+    const keys = [
+      "JAVA_HOME",
+      "PYTHON_HOME",
+      "CONDA_HOME",
+      "GOROOT",
+      "NODE_HOME",
+      "NVM_HOME",
+      "NVM_SYMLINK",
+      "MAVEN_HOME",
+      "Path",
+      "PATH",
+    ];
 
     return {
       platform: process.platform,
       arch: process.arch,
       isWindows: process.platform === "win32",
-      isAdministrator: await isWindowsAdministrator(),
+      isAdministrator: await this.isAdministrator(),
       systemDrive: process.env.SystemDrive ?? "C:",
       env: Object.fromEntries(keys.map((key) => [key, process.env[key]])),
     };

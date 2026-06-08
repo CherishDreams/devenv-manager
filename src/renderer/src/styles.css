@@ -139,6 +139,28 @@ body {
   max-width: 920px;
 }
 
+.settings-page {
+  width: 100%;
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(360px, 1fr));
+  gap: 16px;
+  width: 100%;
+  align-items: start;
+}
+
+.settings-card-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-mirror-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  column-gap: 16px;
+}
+
 .page-title-row {
   display: flex;
   align-items: center;
@@ -254,18 +276,14 @@ body {
   flex: 0 0 auto;
   place-items: center;
   border-radius: 8px;
-  background: #f8fbff;
+  background: #ffffff;
   box-shadow: inset 0 0 0 1px rgb(23 32 51 / 8%);
 }
 
 .environment-logo svg {
-  width: 40px;
-  height: 40px;
-  fill: none;
-  stroke: var(--logo-color);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  display: block;
+  width: 42px;
+  height: 42px;
 }
 
 .environment-card-body {
@@ -307,10 +325,23 @@ body {
   min-height: 356px;
 }
 
-.vendor-item {
-  min-height: 72px;
-  padding: 12px !important;
+.vendor-list .ant-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 1px;
+}
+
+.vendor-list .ant-list-item {
   border: 1px solid transparent;
+  border-block-end: 1px solid transparent;
+}
+
+.vendor-item {
+  display: block !important;
+  min-height: 72px;
+  width: 100%;
+  padding: 12px !important;
   border-radius: 8px;
   cursor: pointer;
 }
@@ -319,9 +350,29 @@ body {
   background: #f5f8ff;
 }
 
-.vendor-item-active {
+.vendor-list .ant-list-item.vendor-item-active,
+.vendor-list .ant-list-item.vendor-item-active:last-child {
+  border: 1px solid #1668dc;
+  border-block-end: 1px solid #1668dc;
   border-color: #1668dc;
   background: #eef5ff;
+}
+
+.vendor-item-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.vendor-item-name,
+.vendor-item-homepage {
+  display: block;
+  line-height: 1.45;
+}
+
+.vendor-item-homepage {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .operation-section {
@@ -377,6 +428,27 @@ body {
   gap: 12px;
 }
 
+.task-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.task-section-header h4 {
+  margin: 0;
+}
+
+.task-section .ant-table-row {
+  cursor: default;
+}
+
 .download-summary {
   display: flex;
   min-width: 0;
@@ -414,6 +486,11 @@ body {
   }
 
   .version-options {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-form-grid,
+  .settings-mirror-grid {
     grid-template-columns: 1fr;
   }
 }

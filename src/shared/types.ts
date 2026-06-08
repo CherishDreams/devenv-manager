@@ -1,8 +1,14 @@
-export type EnvironmentKind = "java" | "go" | "maven" | "conda";
+export type EnvironmentKind = "java" | "python" | "conda" | "go" | "node" | "nvm" | "maven";
 
 export type InstallScope = "global" | "custom";
 
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export type EnvironmentManagementMode = "symlink" | "direct";
+
+export interface EnvironmentManagementSettings {
+  mode: EnvironmentManagementMode;
+}
 
 export interface VendorOption {
   id: string;
@@ -15,7 +21,7 @@ export interface EnvironmentDefinition {
   name: string;
   group: string;
   description: string;
-  logoId: "java" | "go" | "maven" | "conda";
+  logoId: EnvironmentKind;
   accentColor: string;
   envVars: string[];
   pathEntries: string[];
@@ -56,15 +62,19 @@ export interface ProxySettings {
 
 export interface MirrorSettings {
   java: string;
-  go: string;
-  maven: string;
+  python: string;
   conda: string;
+  go: string;
+  node: string;
+  nvm: string;
+  maven: string;
 }
 
 export interface AppConfig {
   globalInstallDir: string;
   downloadCacheDir: string;
   retainDownloads: boolean;
+  environmentManagement: EnvironmentManagementSettings;
   proxy: ProxySettings;
   mirrors: MirrorSettings;
 }

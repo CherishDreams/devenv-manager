@@ -1,5 +1,5 @@
 import { FolderOpenOutlined, SaveOutlined } from "@ant-design/icons";
-import { App as AntdApp, Button, Card, Checkbox, Form, Input, Space, Typography } from "antd";
+import { App as AntdApp, Button, Card, Checkbox, Form, Input, Radio, Typography } from "antd";
 import type React from "react";
 import { useEffect } from "react";
 import type { AppConfig } from "@shared/types";
@@ -45,7 +45,7 @@ export default function SettingsPage(): React.ReactElement {
   };
 
   return (
-    <div className="page-stack narrow-page">
+    <div className="page-stack settings-page">
       <div className="page-title-row">
         <div>
           <Typography.Title level={3}>设置</Typography.Title>
@@ -56,7 +56,7 @@ export default function SettingsPage(): React.ReactElement {
         </Button>
       </div>
 
-      <Form<ConfigFormValues> form={form} layout="vertical">
+      <Form<ConfigFormValues> form={form} layout="vertical" className="settings-form-grid">
         <Card title="路径">
           <Form.Item name="globalInstallDir" label="全局安装目录" rules={[{ required: true, message: "请选择目录" }]}>
             <DirectoryInput onPick={() => void selectDirectory("globalInstallDir")} />
@@ -67,6 +67,18 @@ export default function SettingsPage(): React.ReactElement {
           <Form.Item name="retainDownloads" valuePropName="checked">
             <Checkbox>保留安装包</Checkbox>
           </Form.Item>
+        </Card>
+
+        <Card title="环境变量管理">
+          <Form.Item name={["environmentManagement", "mode"]} label="切换模式">
+            <Radio.Group optionType="button" buttonStyle="solid">
+              <Radio.Button value="symlink">软件软链接</Radio.Button>
+              <Radio.Button value="direct">直接指向版本目录</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+          <Typography.Text type="secondary">
+            软件软链接使用固定入口目录，直接指向版本目录会用 reg.exe 写入系统环境变量。
+          </Typography.Text>
         </Card>
 
         <Card title="代理">
@@ -81,21 +93,30 @@ export default function SettingsPage(): React.ReactElement {
           </Form.Item>
         </Card>
 
-        <Card title="镜像源">
-          <Space direction="vertical" className="full-width" size={0}>
+        <Card title="镜像源" className="settings-card-wide">
+          <div className="settings-mirror-grid">
             <Form.Item name={["mirrors", "java"]} label="Java">
               <Input />
             </Form.Item>
-            <Form.Item name={["mirrors", "go"]} label="Go">
-              <Input />
-            </Form.Item>
-            <Form.Item name={["mirrors", "maven"]} label="Maven">
+            <Form.Item name={["mirrors", "python"]} label="Python">
               <Input />
             </Form.Item>
             <Form.Item name={["mirrors", "conda"]} label="Conda">
               <Input />
             </Form.Item>
-          </Space>
+            <Form.Item name={["mirrors", "go"]} label="Go">
+              <Input />
+            </Form.Item>
+            <Form.Item name={["mirrors", "node"]} label="Node.js">
+              <Input />
+            </Form.Item>
+            <Form.Item name={["mirrors", "nvm"]} label="nvm-windows">
+              <Input />
+            </Form.Item>
+            <Form.Item name={["mirrors", "maven"]} label="Maven">
+              <Input />
+            </Form.Item>
+          </div>
         </Card>
       </Form>
     </div>

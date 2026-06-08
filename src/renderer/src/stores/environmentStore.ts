@@ -8,6 +8,7 @@ interface EnvironmentState {
   error?: string;
   load: () => Promise<void>;
   setActive: (environment: EnvironmentKind, id: string) => Promise<void>;
+  uninstall: (id: string) => Promise<void>;
   subscribeToEnvironmentEvents: () => () => void;
 }
 
@@ -28,6 +29,16 @@ export const useEnvironmentStore = create<EnvironmentState>((set) => ({
     set({ loading: true, error: undefined });
     try {
       const summary = await envManagerApi.environments.setActive(environment, id);
+      set({ summary, loading: false });
+    } catch (error) {
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+  uninstall: async (id) => {
+    set({ loading: true, error: undefined });
+    try {
+      const summary = await envManagerApi.environments.uninstall(id);
       set({ summary, loading: false });
     } catch (error) {
       set({ error: (error as Error).message, loading: false });

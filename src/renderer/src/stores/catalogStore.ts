@@ -6,7 +6,7 @@ interface CatalogState {
   versionsByKey: Record<string, AvailableVersion[]>;
   loadingByKey: Record<string, boolean>;
   errorByKey: Record<string, string | undefined>;
-  loadVersions: (query: VersionCatalogQuery) => Promise<AvailableVersion[]>;
+  loadVersions: (query: VersionCatalogQuery, options?: { force?: boolean }) => Promise<AvailableVersion[]>;
 }
 
 function getCatalogKey(query: VersionCatalogQuery): string {
@@ -17,11 +17,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   versionsByKey: {},
   loadingByKey: {},
   errorByKey: {},
-  loadVersions: async (query) => {
+  loadVersions: async (query, options) => {
     const key = getCatalogKey(query);
     const cached = get().versionsByKey[key];
 
-    if (cached) {
+    if (cached && !options?.force) {
       return cached;
     }
 

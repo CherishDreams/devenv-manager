@@ -8,12 +8,13 @@ const testingGlobalInstallDir = resolve("E:\\dev_env");
 const legacyGlobalInstallDir = resolve(`${systemDrive}\\DevEnvs`);
 
 function createDefaultConfig(): AppConfig {
-  const userData = app.getPath("userData");
-
   return {
     globalInstallDir: testingGlobalInstallDir,
     downloadCacheDir: join(testingGlobalInstallDir, ".cache"),
     retainDownloads: true,
+    environmentManagement: {
+      mode: "symlink",
+    },
     proxy: {
       enabled: false,
       httpProxy: "",
@@ -21,24 +22,55 @@ function createDefaultConfig(): AppConfig {
     },
     mirrors: {
       java: "official",
-      go: "official",
-      maven: "official",
+      python: "official",
       conda: "official",
+      go: "official",
+      node: "official",
+      nvm: "official",
+      maven: "official",
     },
   };
 }
 
 function mergeConfig(current: AppConfig, patch: Partial<AppConfig>): AppConfig {
+  const normalizedCurrent = normalizeConfig(current);
+
   return {
-    ...current,
+    ...normalizedCurrent,
     ...patch,
+    environmentManagement: {
+      ...normalizedCurrent.environmentManagement,
+      ...patch.environmentManagement,
+    },
     proxy: {
-      ...current.proxy,
+      ...normalizedCurrent.proxy,
       ...patch.proxy,
     },
     mirrors: {
-      ...current.mirrors,
+      ...normalizedCurrent.mirrors,
       ...patch.mirrors,
+    },
+  };
+}
+
+function normalizeConfig(config: AppConfig): AppConfig {
+  const defaults = createDefaultConfig();
+  const partialConfig = config as Partial<AppConfig>;
+
+  return {
+    ...defaults,
+    ...partialConfig,
+    environmentManagement: {
+      ...defaults.environmentManagement,
+      ...partialConfig.environmentManagement,
+    },
+    proxy: {
+      ...defaults.proxy,
+      ...partialConfig.proxy,
+    },
+    mirrors: {
+      ...defaults.mirrors,
+      ...partialConfig.mirrors,
     },
   };
 }
@@ -50,7 +82,7 @@ export class ConfigService {
   );
 
   async get(): Promise<AppConfig> {
-    const config = await this.store.read();
+    const config = normalizeConfig(await this.store.read());
 
     if (resolve(config.globalInstallDir) === legacyGlobalInstallDir) {
       return this.store.write({

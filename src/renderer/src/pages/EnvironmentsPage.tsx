@@ -1,4 +1,11 @@
-import { ArrowLeftOutlined, CloudDownloadOutlined, FolderOpenOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  ArrowLeftOutlined,
+  CloudDownloadOutlined,
+  DeleteOutlined,
+  FolderOpenOutlined,
+  PlayCircleOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import {
   Alert,
   App as AntdApp,
@@ -8,6 +15,7 @@ import {
   Empty,
   Input,
   List,
+  Popconfirm,
   Radio,
   Space,
   Steps,
@@ -17,7 +25,7 @@ import {
 } from "antd";
 import type { TableColumnsType } from "antd";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AvailableVersion,
   EnvironmentDefinition,
@@ -28,6 +36,7 @@ import type {
   VendorOption,
 } from "@shared/types";
 import { envManagerApi } from "../api/envManagerApi";
+import { EnvironmentLogo } from "../components/EnvironmentLogo";
 import { useCatalogStore } from "../stores/catalogStore";
 import { useConfigStore } from "../stores/configStore";
 import { useEnvironmentStore } from "../stores/environmentStore";
@@ -46,42 +55,6 @@ function groupDefinitions(definitions: EnvironmentDefinition[]): Array<[string, 
   }, new Map());
 
   return Array.from(groups.entries());
-}
-
-function EnvironmentLogo({ definition }: { definition: EnvironmentDefinition }): React.ReactElement {
-  const style = { "--logo-color": definition.accentColor } as React.CSSProperties;
-
-  return (
-    <div className="environment-logo" style={style}>
-      {definition.logoId === "java" ? (
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <path d="M25 10c6 5-4 8 1 13M35 8c7 6-5 10 1 16M18 30h28v8c0 8-5 13-14 13s-14-5-14-13v-8Z" />
-          <path d="M46 32h4c4 0 6 3 5 7-1 5-5 8-12 8M17 53h31M20 26h26" />
-        </svg>
-      ) : null}
-      {definition.logoId === "go" ? (
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <path d="M10 24h18M6 32h18M12 40h16" />
-          <path d="M28 32c0-9 7-16 17-16s17 7 17 16-7 16-17 16-17-7-17-16Z" />
-          <path d="M41 26h12M39 32h13M41 38h8" />
-        </svg>
-      ) : null}
-      {definition.logoId === "maven" ? (
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <path d="M17 50c11-20 24-32 39-36-2 12-11 25-29 39" />
-          <path d="M28 34l12 12M22 42l6 6M36 24l10 10" />
-        </svg>
-      ) : null}
-      {definition.logoId === "conda" ? (
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <path d="M18 35c0-11 9-20 20-20 7 0 12 3 16 8" />
-          <path d="M46 29c0 11-9 20-20 20-7 0-12-3-16-8" />
-          <path d="M25 18c1 7-2 12-9 15M39 46c-1-7 2-12 9-15" />
-          <path d="M21 35h22" />
-        </svg>
-      ) : null}
-    </div>
-  );
 }
 
 function getEnvironmentStatus(records: InstallRecord[]): {
@@ -113,7 +86,8 @@ function getEnvironmentStatus(records: InstallRecord[]): {
 
 function createInstallColumns(
   activeByKind: Record<string, string | undefined>,
-  setActive: (environment: EnvironmentKind, id: string) => Promise<void>,
+  switchActive: (record: InstallRecord) => Promise<void>,
+  uninstallRecord: (record: InstallRecord) => Promise<void>,
 ): TableColumnsType<InstallRecord> {
   return [
     {
@@ -157,16 +131,30 @@ function createInstallColumns(
     {
       title: "操作",
       key: "actions",
-      width: 160,
+      width: 190,
       render: (_, record) => (
-        <Button
-          size="small"
-          icon={<PlayCircleOutlined />}
-          disabled={activeByKind[record.environment] === record.id}
-          onClick={() => void setActive(record.environment, record.id)}
-        >
-          切换
-        </Button>
+        <Space>
+          <Button
+            size="small"
+            icon={<PlayCircleOutlined />}
+            disabled={activeByKind[record.environment] === record.id}
+            onClick={() => void switchActive(record)}
+          >
+            切换
+          </Button>
+          <Popconfirm
+            title="卸载环境"
+            description={`删除 ${record.name} ${record.version}，并清理匹配的环境变量？`}
+            okText="卸载"
+            okButtonProps={{ danger: true }}
+            cancelText="取消"
+            onConfirm={() => uninstallRecord(record)}
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              卸载
+            </Button>
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
@@ -221,15 +209,20 @@ function VendorList({
   return (
     <Card title="发行商" className="operation-card">
       <List
+        className="vendor-list"
         dataSource={vendors}
         renderItem={(vendor) => (
           <List.Item
             className={vendor.id === selectedVendorId ? "vendor-item vendor-item-active" : "vendor-item"}
             onClick={() => onSelect(vendor.id)}
           >
-            <Space direction="vertical" size={2}>
-              <Typography.Text strong>{vendor.name}</Typography.Text>
-              <Typography.Text type="secondary">{vendor.homepage}</Typography.Text>
+            <Space className="vendor-item-content" direction="vertical" size={2}>
+              <Typography.Text strong className="vendor-item-name">
+                {vendor.name}
+              </Typography.Text>
+              <Typography.Text className="vendor-item-homepage" type="secondary">
+                {vendor.homepage}
+              </Typography.Text>
             </Space>
           </List.Item>
         )}
@@ -324,11 +317,22 @@ function OperationArea({ definition }: { definition: EnvironmentDefinition }): R
 
   const refreshVersions = async (): Promise<void> => {
     if (!selectedVendorId) {
+      message.warning("请先选择发行商");
       return;
     }
 
-    const nextVersions = await loadVersions({ environment: definition.id, vendor: selectedVendorId });
-    setSelectedVersionId((current) => (nextVersions.some((version) => version.id === current) ? current : nextVersions[0]?.id));
+    try {
+      const nextVersions = await loadVersions({ environment: definition.id, vendor: selectedVendorId }, { force: true });
+      setSelectedVersionId((current) => (nextVersions.some((version) => version.id === current) ? current : nextVersions[0]?.id));
+
+      if (nextVersions.length > 0) {
+        message.success(`版本获取完成，共 ${nextVersions.length} 个可安装版本`);
+      } else {
+        message.info("版本获取完成，当前发行商暂无可安装版本");
+      }
+    } catch (fetchError) {
+      message.error(`版本获取失败：${(fetchError as Error).message}`);
+    }
   };
 
   const selectDirectory = async (): Promise<void> => {
@@ -540,10 +544,12 @@ function InstallCatalog({
 }
 
 export default function EnvironmentsPage(): React.ReactElement {
+  const { message } = AntdApp.useApp();
   const [selectedDefinitionId, setSelectedDefinitionId] = useState<EnvironmentKind | undefined>();
   const summary = useEnvironmentStore((state) => state.summary);
   const loading = useEnvironmentStore((state) => state.loading);
   const setActive = useEnvironmentStore((state) => state.setActive);
+  const uninstall = useEnvironmentStore((state) => state.uninstall);
 
   const definitions = summary?.definitions ?? [];
   const installations = summary?.installations ?? [];
@@ -557,9 +563,33 @@ export default function EnvironmentsPage(): React.ReactElement {
     }, new Map());
   }, [installations]);
 
+  const switchActive = useCallback(
+    async (record: InstallRecord) => {
+      try {
+        await setActive(record.environment, record.id);
+        message.success(`已切换到 ${record.name} ${record.version}`);
+      } catch (error) {
+        message.error((error as Error).message);
+      }
+    },
+    [message, setActive],
+  );
+
+  const uninstallRecord = useCallback(
+    async (record: InstallRecord) => {
+      try {
+        await uninstall(record.id);
+        message.success(`已卸载 ${record.name} ${record.version}`);
+      } catch (error) {
+        message.error((error as Error).message);
+      }
+    },
+    [message, uninstall],
+  );
+
   const columns = useMemo(
-    () => createInstallColumns(summary?.activeByKind ?? {}, setActive),
-    [setActive, summary?.activeByKind],
+    () => createInstallColumns(summary?.activeByKind ?? {}, switchActive, uninstallRecord),
+    [summary?.activeByKind, switchActive, uninstallRecord],
   );
 
   const selectedDefinition = useMemo(

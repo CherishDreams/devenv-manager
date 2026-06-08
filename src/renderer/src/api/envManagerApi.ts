@@ -16,6 +16,9 @@ const mockConfig: AppConfig = {
   globalInstallDir: "E:\\dev_env",
   downloadCacheDir: "E:\\dev_env\\.cache",
   retainDownloads: true,
+  environmentManagement: {
+    mode: "symlink",
+  },
   proxy: {
     enabled: false,
     httpProxy: "",
@@ -23,9 +26,12 @@ const mockConfig: AppConfig = {
   },
   mirrors: {
     java: "official",
-    go: "official",
-    maven: "official",
+    python: "official",
     conda: "official",
+    go: "official",
+    node: "official",
+    nvm: "official",
+    maven: "official",
   },
 };
 
@@ -47,8 +53,10 @@ const mockSystemStatus: SystemStatus = {
 const createMockApi = (): NonNullable<typeof window.envManager> => {
   let config = mockConfig;
   let tasks = readMockTasks();
+  let summary = mockSummary;
   const taskTimers = new Map<string, number[]>();
   const listeners = new Set<(nextTasks: ManagedTask[]) => void>();
+  const environmentListeners = new Set<(nextSummary: EnvironmentSummary) => void>();
 
   function readMockTasks(): ManagedTask[] {
     try {
@@ -232,6 +240,10 @@ const createMockApi = (): NonNullable<typeof window.envManager> => {
         config = {
           ...config,
           ...patch,
+          environmentManagement: {
+            ...config.environmentManagement,
+            ...patch.environmentManagement,
+          },
           proxy: {
             ...config.proxy,
             ...patch.proxy,
@@ -248,9 +260,36 @@ const createMockApi = (): NonNullable<typeof window.envManager> => {
       getStatus: async () => mockSystemStatus,
     },
     environments: {
-      getSummary: async () => mockSummary,
-      setActive: async (_environment: EnvironmentKind, _id: string) => mockSummary,
-      onChanged: (_callback: (summary: EnvironmentSummary) => void) => () => undefined,
+      getSummary: async () => summary,
+      setActive: async (environment: EnvironmentKind, id: string) => {
+        summary = {
+          ...summary,
+          installations: summary.installations.map((record) => ({
+            ...record,
+            active: record.environment === environment ? record.id === id : record.active,
+          })),
+          activeByKind: {
+            ...summary.activeByKind,
+            [environment]: id,
+          },
+        };
+        environmentListeners.forEach((listener) => listener(summary));
+        return summary;
+      },
+      uninstall: async (id: string) => {
+        summary = {
+          ...summary,
+          installations: summary.installations.filter((record) => record.id !== id),
+        };
+        environmentListeners.forEach((listener) => listener(summary));
+        return summary;
+      },
+      onChanged: (callback: (nextSummary: EnvironmentSummary) => void) => {
+        environmentListeners.add(callback);
+        return () => {
+          environmentListeners.delete(callback);
+        };
+      },
     },
     tasks: {
       list: async () => {
@@ -329,6 +368,7 @@ function createMissingPreloadApi(): NonNullable<typeof window.envManager> {
     environments: {
       getSummary: reject,
       setActive: reject,
+      uninstall: reject,
       onChanged: () => () => undefined,
     },
     tasks: {

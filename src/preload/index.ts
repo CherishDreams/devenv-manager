@@ -20,6 +20,7 @@ const envManagerApi = {
     getSummary: () => ipcRenderer.invoke("environments:get-summary"),
     setActive: (environment: EnvironmentKind, id: string) =>
       ipcRenderer.invoke("environments:set-active", environment, id),
+    uninstall: (id: string) => ipcRenderer.invoke("environments:uninstall", id),
     onChanged: (callback: (summary: EnvironmentSummary) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, summary: EnvironmentSummary) => callback(summary);
       ipcRenderer.on("environments:changed", listener);

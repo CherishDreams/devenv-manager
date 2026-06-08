@@ -1,5 +1,12 @@
-import { CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, StopOutlined, SyncOutlined } from "@ant-design/icons";
-import { App as AntdApp, Badge, Button, Card, Empty, List, Progress, Space, Table, Tag, Typography } from "antd";
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CloseCircleOutlined,
+  FileTextOutlined,
+  StopOutlined,
+  SyncOutlined,
+} from "@ant-design/icons";
+import { App as AntdApp, Badge, Button, Empty, List, Modal, Progress, Space, Table, Tag, Tooltip, Typography } from "antd";
 import type { TableColumnsType } from "antd";
 import type React from "react";
 import { useMemo, useState } from "react";
@@ -98,12 +105,11 @@ export default function LogsPage(): React.ReactElement {
   const loading = useTaskStore((state) => state.loading);
   const cancel = useTaskStore((state) => state.cancel);
   const { message } = AntdApp.useApp();
-  const [selectedTaskId, setSelectedTaskId] = useState<string>();
+  const [logTaskId, setLogTaskId] = useState<string>();
 
-  const selectedTask = useMemo(
-    () => tasks.find((task) => task.id === selectedTaskId) ?? tasks[0],
-    [selectedTaskId, tasks],
-  );
+  const activeTasks = useMemo(() => tasks.filter((task) => task.status === "queued" || task.status === "running"), [tasks]);
+  const historyTasks = useMemo(() => tasks.filter((task) => task.status !== "queued" && task.status !== "running"), [tasks]);
+  const logTask = useMemo(() => tasks.find((task) => task.id === logTaskId), [logTaskId, tasks]);
 
   const columns = useMemo<TableColumnsType<ManagedTask>>(
     () => [
@@ -143,23 +149,36 @@ export default function LogsPage(): React.ReactElement {
       {
         title: "操作",
         key: "actions",
-        width: 120,
+        width: 112,
         render: (_, record) => {
           const cancellable = record.status === "queued" || record.status === "running";
 
           return (
-            <Button
-              danger
-              size="small"
-              icon={<StopOutlined />}
-              disabled={!cancellable}
-              onClick={(event) => {
-                event.stopPropagation();
-                void cancel(record.id).then(() => message.success("任务已取消"));
-              }}
-            >
-              取消
-            </Button>
+            <Space size={6}>
+              <Tooltip title="查看日志">
+                <Button
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setLogTaskId(record.id);
+                  }}
+                />
+              </Tooltip>
+              {cancellable ? (
+                <Tooltip title="取消任务">
+                  <Button
+                    danger
+                    size="small"
+                    icon={<StopOutlined />}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void cancel(record.id).then(() => message.success("任务已取消"));
+                    }}
+                  />
+                </Tooltip>
+              ) : null}
+            </Space>
           );
         },
       },
@@ -177,23 +196,54 @@ export default function LogsPage(): React.ReactElement {
         <Badge count={tasks.length} />
       </div>
 
-      <Table
-        rowKey="id"
-        loading={loading}
-        columns={columns}
-        dataSource={tasks}
-        pagination={false}
-        onRow={(record) => ({
-          onClick: () => setSelectedTaskId(record.id),
-        })}
-      />
+      <section className="task-section">
+        <div className="task-section-header">
+          <div>
+            <Typography.Title level={4}>进行中的任务</Typography.Title>
+            <Typography.Text type="secondary">排队、下载、安装和验证中的任务</Typography.Text>
+          </div>
+          <Badge count={activeTasks.length} />
+        </div>
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={activeTasks}
+          pagination={false}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无进行中的任务" /> }}
+        />
+      </section>
 
-      <Card title={selectedTask?.title ?? "日志详情"}>
-        {selectedTask ? (
+      <section className="task-section">
+        <div className="task-section-header">
+          <div>
+            <Typography.Title level={4}>历史任务</Typography.Title>
+            <Typography.Text type="secondary">已完成、失败或取消的任务</Typography.Text>
+          </div>
+          <Badge count={historyTasks.length} />
+        </div>
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={historyTasks}
+          pagination={false}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史任务" /> }}
+        />
+      </section>
+
+      <Modal
+        title={logTask?.title ?? "安装日志"}
+        open={Boolean(logTask)}
+        width={860}
+        footer={null}
+        onCancel={() => setLogTaskId(undefined)}
+      >
+        {logTask ? (
           <div className="task-detail-stack">
-            <DownloadSummary download={selectedTask.download} />
+            <DownloadSummary download={logTask.download} />
             <List
-              dataSource={selectedTask.logs}
+              dataSource={logTask.logs}
               renderItem={(entry) => (
                 <List.Item>
                   <Space>
@@ -210,7 +260,7 @@ export default function LogsPage(): React.ReactElement {
         ) : (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" />
         )}
-      </Card>
+      </Modal>
     </div>
   );
 }

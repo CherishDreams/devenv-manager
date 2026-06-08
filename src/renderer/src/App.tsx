@@ -55,7 +55,7 @@ function renderPage(pageKey: PageKey): React.ReactNode {
 
 function HeaderStatus(): React.ReactElement {
   const status = useSystemStore((state) => state.status);
-  const taskCount = useTaskStore((state) => state.tasks.length);
+  const runningTaskCount = useTaskStore((state) => state.tasks.filter((task) => task.status === "running").length);
 
   return (
     <div className="header-status">
@@ -63,7 +63,7 @@ function HeaderStatus(): React.ReactElement {
       <Tag color={status?.isAdministrator ? "green" : "orange"}>
         {status?.isAdministrator ? "管理员" : "普通权限"}
       </Tag>
-      <Tag color="default">任务 {taskCount}</Tag>
+      <Tag color={runningTaskCount > 0 ? "processing" : "default"}>运行中 {runningTaskCount}</Tag>
     </div>
   );
 }
