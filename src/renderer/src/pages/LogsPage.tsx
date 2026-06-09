@@ -2,14 +2,16 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloseCircleOutlined,
+  DeleteOutlined,
   FileTextOutlined,
+  ReloadOutlined,
   StopOutlined,
   SyncOutlined,
 } from "@ant-design/icons";
 import { App as AntdApp, Badge, Button, Empty, List, Modal, Progress, Space, Table, Tag, Tooltip, Typography } from "antd";
-import type { TableColumnsType } from "antd";
+import type { TableColumnsType, TableProps } from "antd";
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ManagedTask, TaskDownloadProgress, TaskStatus } from "@shared/types";
 import { useTaskStore } from "../stores/taskStore";
 
@@ -39,6 +41,22 @@ const statusMeta: Record<TaskStatus, { text: string; color: string; icon: React.
     color: "warning",
     icon: <CloseCircleOutlined />,
   },
+};
+
+const taskPageSize = 8;
+const logPageSize = 12;
+
+const taskTablePagination: TableProps<ManagedTask>["pagination"] = {
+  pageSize: taskPageSize,
+  showSizeChanger: true,
+  pageSizeOptions: [String(taskPageSize), "15", "30"],
+  showTotal: (total) => `共 ${total} 条`,
+};
+
+const logListPagination = {
+  pageSize: logPageSize,
+  size: "small" as const,
+  showSizeChanger: false,
 };
 
 function StatusTag({ status }: { status: TaskStatus }): React.ReactElement {
@@ -104,12 +122,72 @@ export default function LogsPage(): React.ReactElement {
   const tasks = useTaskStore((state) => state.tasks);
   const loading = useTaskStore((state) => state.loading);
   const cancel = useTaskStore((state) => state.cancel);
-  const { message } = AntdApp.useApp();
+  const retry = useTaskStore((state) => state.retry);
+  const remove = useTaskStore((state) => state.remove);
+  const clearFinished = useTaskStore((state) => state.clearFinished);
+  const { message, modal } = AntdApp.useApp();
   const [logTaskId, setLogTaskId] = useState<string>();
 
   const activeTasks = useMemo(() => tasks.filter((task) => task.status === "queued" || task.status === "running"), [tasks]);
   const historyTasks = useMemo(() => tasks.filter((task) => task.status !== "queued" && task.status !== "running"), [tasks]);
   const logTask = useMemo(() => tasks.find((task) => task.id === logTaskId), [logTaskId, tasks]);
+  const activePagination = activeTasks.length > taskPageSize ? taskTablePagination : false;
+  const historyPagination = historyTasks.length > taskPageSize ? taskTablePagination : false;
+
+  const retryTask = useCallback(
+    async (record: ManagedTask) => {
+      try {
+        await retry(record.id);
+        message.success(`已重新创建 ${record.title} 的安装任务`);
+      } catch (error) {
+        message.error((error as Error).message);
+      }
+    },
+    [message, retry],
+  );
+
+  const removeTask = useCallback(
+    (record: ManagedTask) => {
+      modal.confirm({
+        title: "移除任务记录",
+        content: `确认移除 ${record.title} 的任务记录和日志？`,
+        okText: "移除",
+        okType: "danger",
+        cancelText: "取消",
+        onOk: async () => {
+          try {
+            await remove(record.id);
+            setLogTaskId((current) => (current === record.id ? undefined : current));
+            message.success("任务记录已移除");
+          } catch (error) {
+            message.error((error as Error).message);
+            throw error;
+          }
+        },
+      });
+    },
+    [message, modal, remove],
+  );
+
+  const clearHistory = useCallback(() => {
+    modal.confirm({
+      title: "清理历史任务",
+      content: `确认清理 ${historyTasks.length} 条已结束任务记录和日志？进行中的任务会保留。`,
+      okText: "清理",
+      okType: "danger",
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          await clearFinished();
+          setLogTaskId(undefined);
+          message.success("历史任务已清理");
+        } catch (error) {
+          message.error((error as Error).message);
+          throw error;
+        }
+      },
+    });
+  }, [clearFinished, historyTasks.length, message, modal]);
 
   const columns = useMemo<TableColumnsType<ManagedTask>>(
     () => [
@@ -149,9 +227,10 @@ export default function LogsPage(): React.ReactElement {
       {
         title: "操作",
         key: "actions",
-        width: 112,
+        width: 152,
         render: (_, record) => {
           const cancellable = record.status === "queued" || record.status === "running";
+          const removable = !cancellable;
 
           return (
             <Space size={6}>
@@ -165,6 +244,18 @@ export default function LogsPage(): React.ReactElement {
                   }}
                 />
               </Tooltip>
+              {record.status === "failed" ? (
+                <Tooltip title="重试任务">
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void retryTask(record);
+                    }}
+                  />
+                </Tooltip>
+              ) : null}
               {cancellable ? (
                 <Tooltip title="取消任务">
                   <Button
@@ -178,12 +269,25 @@ export default function LogsPage(): React.ReactElement {
                   />
                 </Tooltip>
               ) : null}
+              {removable ? (
+                <Tooltip title="移除记录">
+                  <Button
+                    danger
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeTask(record);
+                    }}
+                  />
+                </Tooltip>
+              ) : null}
             </Space>
           );
         },
       },
     ],
-    [cancel, message],
+    [cancel, message, removeTask, retryTask],
   );
 
   return (
@@ -209,7 +313,7 @@ export default function LogsPage(): React.ReactElement {
           loading={loading}
           columns={columns}
           dataSource={activeTasks}
-          pagination={false}
+          pagination={activePagination}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无进行中的任务" /> }}
         />
       </section>
@@ -220,14 +324,19 @@ export default function LogsPage(): React.ReactElement {
             <Typography.Title level={4}>历史任务</Typography.Title>
             <Typography.Text type="secondary">已完成、失败或取消的任务</Typography.Text>
           </div>
-          <Badge count={historyTasks.length} />
+          <Space>
+            <Badge count={historyTasks.length} />
+            <Button danger icon={<DeleteOutlined />} disabled={historyTasks.length === 0} onClick={clearHistory}>
+              清理历史
+            </Button>
+          </Space>
         </div>
         <Table
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={historyTasks}
-          pagination={false}
+          pagination={historyPagination}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史任务" /> }}
         />
       </section>
@@ -244,6 +353,8 @@ export default function LogsPage(): React.ReactElement {
             <DownloadSummary download={logTask.download} />
             <List
               dataSource={logTask.logs}
+              pagination={logTask.logs.length > logPageSize ? logListPagination : false}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" /> }}
               renderItem={(entry) => (
                 <List.Item>
                   <Space>

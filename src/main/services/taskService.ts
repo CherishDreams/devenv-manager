@@ -50,6 +50,44 @@ function getVerificationLogIndex(logs: TaskLogEntry[]): number {
   return -1;
 }
 
+function isActiveTask(task: ManagedTask): boolean {
+  return task.status === "queued" || task.status === "running";
+}
+
+function cloneInstallInput(input: InstallTaskInput): InstallTaskInput {
+  return {
+    ...input,
+  };
+}
+
+function recoverLegacyInput(task: ManagedTask): InstallTaskInput | undefined {
+  const [environmentToken, vendorOrVersion, ...versionParts] = task.title.trim().split(/\s+/);
+  const definition = environmentDefinitions.find((item) => item.id.toUpperCase() === environmentToken?.toUpperCase());
+
+  if (!definition || !vendorOrVersion) {
+    return undefined;
+  }
+
+  const vendor = versionParts.length > 0 ? vendorOrVersion : definition.vendors[0]?.id;
+  const version = versionParts.length > 0 ? versionParts.join(" ") : vendorOrVersion;
+
+  if (!version) {
+    return undefined;
+  }
+
+  return {
+    environment: definition.id,
+    vendor,
+    version,
+    scope: "global",
+    configureSystemEnv: true,
+  };
+}
+
+function getRetryInput(task: ManagedTask): InstallTaskInput | undefined {
+  return task.input ? cloneInstallInput(task.input) : recoverLegacyInput(task);
+}
+
 interface TaskData {
   tasks: ManagedTask[];
 }
@@ -79,32 +117,79 @@ export class TaskService extends EventEmitter {
 
   async createInstallTask(input: InstallTaskInput): Promise<ManagedTask> {
     await this.ready;
-    const now = new Date().toISOString();
-    const title = [input.environment.toUpperCase(), input.vendor, input.version].filter(Boolean).join(" ");
-    const task: ManagedTask = {
-      id: crypto.randomUUID(),
-      title,
-      status: "queued",
-      progress: 0,
-      createdAt: now,
-      updatedAt: now,
-      logs: [
-        createLog("安装任务已创建。"),
-        createLog("安装器已进入执行队列。"),
-      ],
-    };
+    return this.createQueuedInstallTask(input);
+  }
 
-    this.tasks.unshift(task);
+  async getRetryInput(id: string): Promise<InstallTaskInput | undefined> {
+    await this.ready;
+    const task = this.findTask(id);
+    const input = task ? getRetryInput(task) : undefined;
+    return input ? cloneInstallInput(input) : undefined;
+  }
+
+  async retryTask(id: string): Promise<ManagedTask> {
+    await this.ready;
+    const task = this.findTask(id);
+
+    if (!task) {
+      throw new Error("未找到要重试的任务。");
+    }
+
+    if (task.status !== "failed") {
+      throw new Error("只有失败任务可以重试。");
+    }
+
+    const input = getRetryInput(task);
+
+    if (!input) {
+      throw new Error("该任务缺少可重试的安装参数，请重新创建安装任务。");
+    }
+
+    const legacyWarning = task.input
+      ? undefined
+      : createLog("原任务缺少完整安装参数，已按标题恢复为全局安装任务。", "warn");
+
+    return this.createQueuedInstallTask(input, [
+      createLog(`由失败任务重试创建：${task.title}`),
+      ...(legacyWarning ? [legacyWarning] : []),
+    ]);
+  }
+
+  async clearFinishedTasks(): Promise<ManagedTask[]> {
+    await this.ready;
+    const remainingTasks = this.tasks.filter(isActiveTask);
+
+    if (remainingTasks.length === this.tasks.length) {
+      return this.snapshot();
+    }
+
+    this.tasks = remainingTasks;
     this.emitChanged();
-    this.startInstallTask(task.id, input);
-    return this.cloneTask(task);
+    return this.snapshot();
+  }
+
+  async removeTask(id: string): Promise<ManagedTask[]> {
+    await this.ready;
+    const task = this.findTask(id);
+
+    if (!task) {
+      return this.snapshot();
+    }
+
+    if (isActiveTask(task)) {
+      throw new Error("进行中的任务不能移除，请先取消任务。");
+    }
+
+    this.tasks = this.tasks.filter((item) => item.id !== id);
+    this.emitChanged();
+    return this.snapshot();
   }
 
   async cancelTask(id: string): Promise<ManagedTask | undefined> {
     await this.ready;
     const task = this.findTask(id);
 
-    if (!task || !["queued", "running"].includes(task.status)) {
+    if (!task || !isActiveTask(task)) {
       return task ? this.cloneTask(task) : undefined;
     }
 
@@ -117,6 +202,30 @@ export class TaskService extends EventEmitter {
 
     const updatedTask = this.findTask(id);
     return updatedTask ? this.cloneTask(updatedTask) : undefined;
+  }
+
+  private createQueuedInstallTask(input: InstallTaskInput, additionalLogs: TaskLogEntry[] = []): ManagedTask {
+    const now = new Date().toISOString();
+    const title = [input.environment.toUpperCase(), input.vendor, input.version].filter(Boolean).join(" ");
+    const task: ManagedTask = {
+      id: crypto.randomUUID(),
+      title,
+      status: "queued",
+      progress: 0,
+      createdAt: now,
+      updatedAt: now,
+      input: cloneInstallInput(input),
+      logs: [
+        createLog("安装任务已创建。"),
+        createLog("安装器已进入执行队列。"),
+        ...additionalLogs,
+      ],
+    };
+
+    this.tasks.unshift(task);
+    this.emitChanged();
+    this.startInstallTask(task.id, input);
+    return this.cloneTask(task);
   }
 
   private async restoreTasks(): Promise<void> {
@@ -164,7 +273,7 @@ export class TaskService extends EventEmitter {
         };
       }
 
-      if (task.status !== "queued" && task.status !== "running") {
+      if (!isActiveTask(task)) {
         return {
           ...task,
           logs: normalizedLogs,
@@ -274,7 +383,7 @@ export class TaskService extends EventEmitter {
   ): void {
     const task = this.findTask(id);
 
-    if (!task || ["succeeded", "failed", "cancelled"].includes(task.status)) {
+    if (!task || !isActiveTask(task)) {
       return;
     }
 
@@ -321,6 +430,7 @@ export class TaskService extends EventEmitter {
   private cloneTask(task: ManagedTask): ManagedTask {
     return {
       ...task,
+      input: task.input ? cloneInstallInput(task.input) : undefined,
       download: task.download ? { ...task.download } : undefined,
       logs: [...task.logs],
     };

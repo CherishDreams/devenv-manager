@@ -1,7 +1,8 @@
 import { app, dialog, ipcMain, type BrowserWindow } from "electron";
-import type { AppConfig, EnvironmentKind, InstallTaskInput } from "../../shared/types";
+import type { AdoptEnvironmentInput, AppConfig, EnvironmentKind, InstallTaskInput } from "../../shared/types";
 import { ConfigService } from "../services/configService";
 import { requestElevationRelaunch } from "../services/elevationService";
+import { EnvironmentDiscoveryService } from "../services/environmentDiscoveryService";
 import { EnvironmentRecordService } from "../services/environmentRecordService";
 import { SystemStatusService } from "../services/systemStatusService";
 import { TaskService } from "../services/taskService";
@@ -9,6 +10,7 @@ import { VersionCatalogService } from "../services/versionCatalogService";
 
 export interface IpcServices {
   configService: ConfigService;
+  environmentDiscoveryService: EnvironmentDiscoveryService;
   environmentRecordService: EnvironmentRecordService;
   systemStatusService: SystemStatusService;
   taskService: TaskService;
@@ -32,6 +34,12 @@ export function registerIpc(mainWindow: BrowserWindow, services: IpcServices): v
   ipcMain.handle("system:get-status", () => services.systemStatusService.getStatus());
 
   ipcMain.handle("environments:get-summary", () => services.environmentRecordService.getSummary());
+  ipcMain.handle("environments:discover", () => services.environmentDiscoveryService.discover());
+  ipcMain.handle("environments:adopt", async (_, inputs: AdoptEnvironmentInput[]) => {
+    const summary = await services.environmentRecordService.adoptExistingInstalls(inputs);
+    mainWindow.webContents.send("environments:changed", summary);
+    return summary;
+  });
   ipcMain.handle("environments:set-active", async (_, environment: EnvironmentKind, id: string) => {
     if (await services.environmentRecordService.requiresElevationForSetActive(environment, id)) {
       await ensureAdministratorForEnvironmentWrite(services, ["--env-manager-set-active", environment, id]);
@@ -60,6 +68,17 @@ export function registerIpc(mainWindow: BrowserWindow, services: IpcServices): v
     return services.taskService.createInstallTask(input);
   });
   ipcMain.handle("tasks:cancel", (_, id: string) => services.taskService.cancelTask(id));
+  ipcMain.handle("tasks:retry", async (_, id: string) => {
+    const input = await services.taskService.getRetryInput(id);
+
+    if (input?.configureSystemEnv && (await services.environmentRecordService.requiresElevationForInstall(input.environment))) {
+      await ensureAdministratorForEnvironmentWrite(services);
+    }
+
+    return services.taskService.retryTask(id);
+  });
+  ipcMain.handle("tasks:remove", (_, id: string) => services.taskService.removeTask(id));
+  ipcMain.handle("tasks:clear-finished", () => services.taskService.clearFinishedTasks());
 
   ipcMain.handle("catalog:list-versions", (_, query) => services.versionCatalogService.listVersions(query));
 

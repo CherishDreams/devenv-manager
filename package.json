@@ -34,12 +34,24 @@
     "appId": "com.local.envmanager",
     "productName": "环境管理",
     "directories": {
+      "buildResources": "build",
       "output": "release"
     },
     "files": [
       "out/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
     "win": {
+      "icon": "build/icon.ico",
       "target": "nsis",
       "requestedExecutionLevel": "requireAdministrator"
     },

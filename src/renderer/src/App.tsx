@@ -1,6 +1,13 @@
-import { AppstoreOutlined, CloseOutlined, DashboardOutlined, FileTextOutlined, SettingOutlined, ToolOutlined, BgColorsOutlined } from "@ant-design/icons";
-import { App as AntdApp, Button, ConfigProvider, Layout, Menu, Spin, Tag, Typography, Switch, Tooltip } from "antd";
-import type { MenuProps } from "antd";
+import {
+  AppstoreOutlined,
+  BellOutlined,
+  BgColorsOutlined,
+  DashboardOutlined,
+  FileTextOutlined,
+  SettingOutlined,
+  ToolOutlined,
+} from "@ant-design/icons";
+import { App as AntdApp, Badge, Button, ConfigProvider, Spin, Switch, Tooltip, Typography } from "antd";
 import type React from "react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useConfigStore } from "./stores/configStore";
@@ -8,8 +15,9 @@ import { useEnvironmentStore } from "./stores/environmentStore";
 import { useSystemStore } from "./stores/systemStore";
 import { useTaskStore } from "./stores/taskStore";
 import { useUiStore } from "./stores/uiStore";
+import { AppLogo } from "./components/AppLogo";
 
-type PageKey = "dashboard" | "installed" | "environments" | "logs";
+type PageKey = "dashboard" | "installed" | "environments" | "logs" | "settings";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const InstalledEnvironmentsPage = lazy(() => import("./pages/InstalledEnvironmentsPage"));
@@ -17,7 +25,15 @@ const EnvironmentsPage = lazy(() => import("./pages/EnvironmentsPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const LogsPage = lazy(() => import("./pages/LogsPage"));
 
-const navItems: MenuProps["items"] = [
+const pageTitles: Record<PageKey, string> = {
+  dashboard: "仪表盘",
+  environments: "环境管理",
+  installed: "已安装环境",
+  logs: "日志",
+  settings: "应用设置",
+};
+
+const navItems: Array<{ key: PageKey; icon: React.ReactNode; label: string }> = [
   {
     key: "dashboard",
     icon: <DashboardOutlined />,
@@ -48,6 +64,8 @@ function renderPage(pageKey: PageKey): React.ReactNode {
       return <InstalledEnvironmentsPage />;
     case "logs":
       return <LogsPage />;
+    case "settings":
+      return <SettingsPage />;
     case "dashboard":
     default:
       return <DashboardPage />;
@@ -55,33 +73,126 @@ function renderPage(pageKey: PageKey): React.ReactNode {
 }
 
 function HeaderStatus(): React.ReactElement {
-  const status = useSystemStore((state) => state.status);
   const runningTaskCount = useTaskStore((state) => state.tasks.filter((task) => task.status === "running").length);
   const { themeStyle, setThemeStyle } = useUiStore();
 
   return (
     <div className="header-status">
       <Tooltip title="切换炫彩主题">
-        <Switch 
+        <Switch
           checkedChildren={<BgColorsOutlined />}
           unCheckedChildren={<BgColorsOutlined />}
           checked={themeStyle === "vibrant"}
           onChange={(checked) => setThemeStyle(checked ? "vibrant" : "solid")}
-          style={{ marginRight: 8 }}
         />
       </Tooltip>
-      <Tag color={status?.isWindows ? "blue" : "red"}>{status?.isWindows ? "Windows" : "非 Windows"}</Tag>
-      <Tag color={status?.isAdministrator ? "green" : "orange"}>
-        {status?.isAdministrator ? "管理员" : "普通权限"}
-      </Tag>
-      <Tag color={runningTaskCount > 0 ? "processing" : "default"}>运行中 {runningTaskCount}</Tag>
+      <Tooltip title="运行中的任务">
+        <Badge count={runningTaskCount} size="small">
+          <Button icon={<BellOutlined />} />
+        </Badge>
+      </Tooltip>
     </div>
+  );
+}
+
+function PageRail({
+  pageKey,
+  onNavigate,
+  onOpenSettings,
+}: {
+  pageKey: PageKey;
+  onNavigate: (key: PageKey) => void;
+  onOpenSettings: () => void;
+}): React.ReactElement {
+  return (
+    <aside className="floating-rail" aria-label="主导航">
+      <div className="rail-brand">
+        <AppLogo />
+      </div>
+      <nav className="rail-nav">
+        {navItems.map((item) => (
+          <Tooltip title={item.label} placement="right" key={item.key}>
+            <button
+              className={pageKey === item.key ? "rail-button rail-button-active" : "rail-button"}
+              type="button"
+              aria-label={item.label}
+              aria-current={pageKey === item.key ? "page" : undefined}
+              onClick={() => onNavigate(item.key)}
+            >
+              {item.icon}
+            </button>
+          </Tooltip>
+        ))}
+      </nav>
+      <div className="rail-footer">
+        <Tooltip title="设置" placement="right">
+          <button
+            className={pageKey === "settings" ? "rail-button rail-button-active" : "rail-button"}
+            type="button"
+            aria-label="设置"
+            aria-current={pageKey === "settings" ? "page" : undefined}
+            onClick={onOpenSettings}
+          >
+            <SettingOutlined />
+          </button>
+        </Tooltip>
+      </div>
+    </aside>
+  );
+}
+
+function ClassicSidebar({
+  pageKey,
+  onNavigate,
+}: {
+  pageKey: PageKey;
+  onNavigate: (key: PageKey) => void;
+}): React.ReactElement {
+  return (
+    <aside className="classic-sidebar" aria-label="主导航">
+      <div className="classic-sidebar-brand">
+        <div className="classic-brand-mark">
+          <AppLogo />
+        </div>
+        <div className="classic-brand-copy">
+          <strong>DevEnv Manager</strong>
+          <span>Windows</span>
+        </div>
+      </div>
+      <nav className="classic-sidebar-nav">
+        {navItems.map((item) => (
+          <button
+            className={pageKey === item.key ? "classic-sidebar-item classic-sidebar-item-active" : "classic-sidebar-item"}
+            type="button"
+            key={item.key}
+            aria-current={pageKey === item.key ? "page" : undefined}
+            onClick={() => onNavigate(item.key)}
+          >
+            <span className="classic-sidebar-icon">{item.icon}</span>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="classic-sidebar-footer">
+        <button
+          className={pageKey === "settings" ? "classic-sidebar-item classic-sidebar-item-active" : "classic-sidebar-item"}
+          type="button"
+          aria-current={pageKey === "settings" ? "page" : undefined}
+          onClick={() => onNavigate("settings")}
+        >
+          <span className="classic-sidebar-icon">
+            <SettingOutlined />
+          </span>
+          <span>设置</span>
+        </button>
+      </div>
+    </aside>
   );
 }
 
 export default function App(): React.ReactElement {
   const [pageKey, setPageKey] = useState<PageKey>("dashboard");
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const config = useConfigStore((state) => state.config);
   const loadConfig = useConfigStore((state) => state.load);
   const loadSystem = useSystemStore((state) => state.load);
   const loadEnvironment = useEnvironmentStore((state) => state.load);
@@ -113,9 +224,8 @@ export default function App(): React.ReactElement {
     return () => window.removeEventListener("env-manager:navigate", navigate);
   }, []);
 
-  const selectedKeys = useMemo(() => [pageKey], [pageKey]);
-
   const { themeStyle } = useUiStore();
+  const navigationLayout = config?.appearance?.navigationLayout ?? "sidebar";
 
   useEffect(() => {
     if (themeStyle === "vibrant") {
@@ -129,7 +239,7 @@ export default function App(): React.ReactElement {
     const isVibrant = themeStyle === "vibrant";
     return {
       token: {
-        borderRadius: 12, // Increased border radius for premium feel
+        borderRadius: 8,
         colorPrimary: "#1668dc",
         fontFamily:
           "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -137,16 +247,11 @@ export default function App(): React.ReactElement {
         colorBgElevated: isVibrant ? "rgba(255, 255, 255, 0.8)" : "#ffffff",
       },
       components: {
-        Layout: {
-          bodyBg: isVibrant ? "transparent" : "#f5f5f5",
-          siderBg: isVibrant ? "transparent" : "#ffffff",
-          headerBg: isVibrant ? "transparent" : "#ffffff",
+        Button: {
+          borderRadius: 8,
         },
-        Menu: {
-          itemBg: isVibrant ? "transparent" : undefined,
-          subMenuItemBg: isVibrant ? "transparent" : undefined,
-          itemActiveBg: isVibrant ? "rgba(255, 255, 255, 0.5)" : undefined,
-          itemSelectedBg: isVibrant ? "rgba(255, 255, 255, 0.6)" : undefined,
+        Card: {
+          borderRadiusLG: 8,
         },
       },
     };
@@ -155,33 +260,27 @@ export default function App(): React.ReactElement {
   return (
     <ConfigProvider theme={themeConfig}>
       <AntdApp>
-        <Layout className="app-shell">
-          <Layout.Sider className="side-nav" width={228}>
-            <div className="brand">
-              <div className="brand-mark">EM</div>
-              <div>
-                <Typography.Text strong>环境管理</Typography.Text>
-                <Typography.Text className="brand-subtitle">Windows</Typography.Text>
-              </div>
-            </div>
-            <Menu
-              mode="inline"
-              selectedKeys={selectedKeys}
-              items={navItems}
-              onClick={(event) => setPageKey(event.key as PageKey)}
-            />
-            <div className="side-nav-footer">
-              <Button icon={<SettingOutlined />} block onClick={() => setSettingsOpen(true)}>
-                设置
-              </Button>
-            </div>
-          </Layout.Sider>
-          <Layout>
-            <Layout.Header className="app-header">
-              <Typography.Title level={4}>开发环境管理</Typography.Title>
-              <HeaderStatus />
-            </Layout.Header>
-            <Layout.Content className="app-content">
+        <div className={`app-shell app-shell-${navigationLayout}`}>
+          {navigationLayout === "sidebar" ? (
+            <ClassicSidebar pageKey={pageKey} onNavigate={setPageKey} />
+          ) : (
+            <PageRail pageKey={pageKey} onNavigate={setPageKey} onOpenSettings={() => setPageKey("settings")} />
+          )}
+          <main className={pageKey === "settings" ? "shell-main shell-main-settings" : "shell-main"}>
+            {pageKey !== "settings" ? (
+              <header className="app-header">
+                <div className="app-header-title">
+                  <Typography.Title level={3}>{pageTitles[pageKey]}</Typography.Title>
+                  <Typography.Text>DevEnv Manager</Typography.Text>
+                </div>
+                <div className="top-announcement">
+                  <span className="announcement-badge">本地</span>
+                  <Typography.Text ellipsis>Windows 开发环境集中管理</Typography.Text>
+                </div>
+                <HeaderStatus />
+              </header>
+            ) : null}
+            <section className="app-content">
               <Suspense
                 fallback={
                   <div className="page-loading">
@@ -191,33 +290,9 @@ export default function App(): React.ReactElement {
               >
                 {renderPage(pageKey)}
               </Suspense>
-            </Layout.Content>
-          </Layout>
-        </Layout>
-        {settingsOpen ? (
-          <div className="settings-overlay">
-            <div className="settings-overlay-header">
-              <div>
-                <Typography.Title level={3}>设置</Typography.Title>
-                <Typography.Text type="secondary">安装目录、镜像源、代理与缓存</Typography.Text>
-              </div>
-              <Button icon={<CloseOutlined />} onClick={() => setSettingsOpen(false)}>
-                关闭
-              </Button>
-            </div>
-            <div className="settings-overlay-content">
-              <Suspense
-                fallback={
-                  <div className="page-loading">
-                    <Spin />
-                  </div>
-                }
-              >
-                <SettingsPage />
-              </Suspense>
-            </div>
-          </div>
-        ) : null}
+            </section>
+          </main>
+        </div>
       </AntdApp>
     </ConfigProvider>
   );

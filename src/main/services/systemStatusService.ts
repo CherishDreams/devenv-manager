@@ -34,6 +34,10 @@ export class SystemStatusService {
       "NVM_HOME",
       "NVM_SYMLINK",
       "MAVEN_HOME",
+      "LLVM_MINGW_HOME",
+      "LUA_HOME",
+      "MYSQL_HOME",
+      "PG_HOME",
       "Path",
       "PATH",
     ];

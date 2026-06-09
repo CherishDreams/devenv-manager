@@ -1,12 +1,14 @@
 import { create } from "zustand";
 import { envManagerApi } from "../api/envManagerApi";
-import type { EnvironmentKind, EnvironmentSummary } from "@shared/types";
+import type { AdoptEnvironmentInput, DiscoveredEnvironment, EnvironmentKind, EnvironmentSummary } from "@shared/types";
 
 interface EnvironmentState {
   summary?: EnvironmentSummary;
   loading: boolean;
   error?: string;
   load: () => Promise<void>;
+  discoverExisting: () => Promise<DiscoveredEnvironment[]>;
+  adoptExisting: (inputs: AdoptEnvironmentInput[]) => Promise<void>;
   setActive: (environment: EnvironmentKind, id: string) => Promise<void>;
   uninstall: (id: string) => Promise<void>;
   subscribeToEnvironmentEvents: () => () => void;
@@ -23,6 +25,27 @@ export const useEnvironmentStore = create<EnvironmentState>((set) => ({
       set({ summary, loading: false });
     } catch (error) {
       set({ error: (error as Error).message, loading: false });
+    }
+  },
+  discoverExisting: async () => {
+    set({ loading: true, error: undefined });
+    try {
+      const discovered = await envManagerApi.environments.discover();
+      set({ loading: false });
+      return discovered;
+    } catch (error) {
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+  adoptExisting: async (inputs) => {
+    set({ loading: true, error: undefined });
+    try {
+      const summary = await envManagerApi.environments.adopt(inputs);
+      set({ summary, loading: false });
+    } catch (error) {
+      set({ error: (error as Error).message, loading: false });
+      throw error;
     }
   },
   setActive: async (environment, id) => {

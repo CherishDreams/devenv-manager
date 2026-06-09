@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu } from "electron";
 import { join } from "node:path";
 import { registerIpc } from "./ipc/registerIpc";
 import { ConfigService } from "./services/configService";
+import { EnvironmentDiscoveryService } from "./services/environmentDiscoveryService";
 import { EnvironmentRecordService } from "./services/environmentRecordService";
 import { InstallerService } from "./services/installerService";
 import { SystemStatusService } from "./services/systemStatusService";
@@ -10,6 +11,10 @@ import { VersionCatalogService } from "./services/versionCatalogService";
 import type { EnvironmentKind } from "../shared/types";
 
 let mainWindow: BrowserWindow | undefined;
+
+function getAppIconPath(): string {
+  return app.isPackaged ? join(process.resourcesPath, "icon.ico") : join(process.cwd(), "build/icon.ico");
+}
 
 function getPendingSetActive(): { environment: EnvironmentKind; id: string } | undefined {
   const markerIndex = process.argv.indexOf("--env-manager-set-active");
@@ -56,6 +61,7 @@ function createWindow(): void {
     minWidth: 1100,
     minHeight: 720,
     title: "环境管理",
+    icon: getAppIconPath(),
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -69,12 +75,14 @@ function createWindow(): void {
 
   const configService = new ConfigService();
   const environmentRecordService = new EnvironmentRecordService(configService);
+  const environmentDiscoveryService = new EnvironmentDiscoveryService(environmentRecordService, configService);
   const installerService = new InstallerService(configService);
   const systemStatusService = new SystemStatusService();
   const taskService = new TaskService(installerService, environmentRecordService);
 
   registerIpc(mainWindow, {
     configService,
+    environmentDiscoveryService,
     environmentRecordService,
     systemStatusService,
     taskService,

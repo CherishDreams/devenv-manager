@@ -1,12 +1,13 @@
 import { create } from "zustand";
 import { envManagerApi } from "../api/envManagerApi";
-import type { AvailableVersion, VersionCatalogQuery } from "@shared/types";
+import type { AvailableVersion, EnvironmentKind, VersionCatalogQuery } from "@shared/types";
 
 interface CatalogState {
   versionsByKey: Record<string, AvailableVersion[]>;
   loadingByKey: Record<string, boolean>;
   errorByKey: Record<string, string | undefined>;
   loadVersions: (query: VersionCatalogQuery, options?: { force?: boolean }) => Promise<AvailableVersion[]>;
+  clearVersions: (environment?: EnvironmentKind) => void;
 }
 
 function getCatalogKey(query: VersionCatalogQuery): string {
@@ -62,5 +63,25 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       }));
       throw error;
     }
+  },
+  clearVersions: (environment) => {
+    if (!environment) {
+      set({
+        versionsByKey: {},
+        loadingByKey: {},
+        errorByKey: {},
+      });
+      return;
+    }
+
+    const prefix = `${environment}:`;
+    const removeEnvironmentKeys = <T>(records: Record<string, T>): Record<string, T> =>
+      Object.fromEntries(Object.entries(records).filter(([key]) => !key.startsWith(prefix)));
+
+    set((state) => ({
+      versionsByKey: removeEnvironmentKeys(state.versionsByKey),
+      loadingByKey: removeEnvironmentKeys(state.loadingByKey),
+      errorByKey: removeEnvironmentKeys(state.errorByKey),
+    }));
   },
 }));

@@ -1,5 +1,6 @@
 import { app } from "electron";
 import { join, resolve } from "node:path";
+import { createOfficialMirrorSettings } from "../../shared/mirrorPresets";
 import type { AppConfig } from "../../shared/types";
 import { JsonFileStore } from "./jsonFileStore";
 
@@ -12,6 +13,9 @@ function createDefaultConfig(): AppConfig {
     globalInstallDir: testingGlobalInstallDir,
     downloadCacheDir: join(testingGlobalInstallDir, ".cache"),
     retainDownloads: true,
+    appearance: {
+      navigationLayout: "sidebar",
+    },
     environmentManagement: {
       mode: "symlink",
     },
@@ -20,15 +24,7 @@ function createDefaultConfig(): AppConfig {
       httpProxy: "",
       httpsProxy: "",
     },
-    mirrors: {
-      java: "official",
-      python: "official",
-      conda: "official",
-      go: "official",
-      node: "official",
-      nvm: "official",
-      maven: "official",
-    },
+    mirrors: createOfficialMirrorSettings(),
   };
 }
 
@@ -38,6 +34,10 @@ function mergeConfig(current: AppConfig, patch: Partial<AppConfig>): AppConfig {
   return {
     ...normalizedCurrent,
     ...patch,
+    appearance: {
+      ...normalizedCurrent.appearance,
+      ...patch.appearance,
+    },
     environmentManagement: {
       ...normalizedCurrent.environmentManagement,
       ...patch.environmentManagement,
@@ -60,6 +60,10 @@ function normalizeConfig(config: AppConfig): AppConfig {
   return {
     ...defaults,
     ...partialConfig,
+    appearance: {
+      ...defaults.appearance,
+      ...partialConfig.appearance,
+    },
     environmentManagement: {
       ...defaults.environmentManagement,
       ...partialConfig.environmentManagement,

@@ -1,393 +1,56 @@
 import { app } from "electron";
-import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, stat, symlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { mkdir, rm, symlink } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { environmentDefinitions } from "../../shared/environmentDefinitions";
 import type {
-  ActiveEnvironmentMap,
+  AdoptEnvironmentInput,
   AppConfig,
-  EnvironmentDefinition,
   EnvironmentKind,
   EnvironmentSummary,
   InstallRecord,
   InstallScope,
 } from "../../shared/types";
 import { ConfigService } from "./configService";
+import {
+  defaultEnvironmentData,
+  getActiveByKind,
+  getCurrentLinkPath,
+  getDefinition,
+  getEnvVars,
+  getManagedPathEntries,
+  getPathEntries,
+  normalizeInstallRecord,
+  pathExists,
+  unique,
+  type EnvironmentData,
+} from "./environmentRecords/helpers";
+import {
+  applyRegistryPlan,
+  cleanupRegistryPlan,
+  registryNeedsCleanup,
+  registryNeedsUpdate,
+  type EnvironmentApplyPlan,
+  type EnvironmentCleanupPlan,
+} from "./environmentRecords/registryEnvironment";
 import { JsonFileStore } from "./jsonFileStore";
-
-interface EnvironmentData {
-  installations: InstallRecord[];
-}
-
-interface RegistryProcessResult {
-  stdout: string;
-  stderr: string;
-}
-
-interface EnvironmentApplyPlan {
-  envVars: Record<string, string>;
-  addPathEntries: string[];
-  removePathEntries: string[];
-}
-
-interface EnvironmentCleanupPlan {
-  envVars: Record<string, string>;
-  removePathEntries: string[];
-}
-
-const defaults: EnvironmentData = {
-  installations: [],
-};
-
-const machineEnvironmentRegistryKey = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
-const registryBackupDirName = "registry-backups";
-
-function unique(values: string[]): string[] {
-  return Array.from(new Set(values.filter(Boolean)));
-}
-
-function normalizePathEntry(value: string): string {
-  return value.trim().replace(/[\\/]+$/, "").toLowerCase();
-}
-
-function splitPathValue(value: string | undefined): string[] {
-  return (value ?? "")
-    .split(";")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-function updatePathValue(currentValue: string | undefined, removeEntries: string[], addEntries: string[]): string {
-  const removeKeys = new Set(removeEntries.map(normalizePathEntry));
-  const nextEntries = splitPathValue(currentValue).filter((entry) => !removeKeys.has(normalizePathEntry(entry)));
-  const existingKeys = new Set(nextEntries.map(normalizePathEntry));
-
-  addEntries.forEach((entry) => {
-    const normalizedEntry = normalizePathEntry(entry);
-
-    if (!existingKeys.has(normalizedEntry)) {
-      nextEntries.push(entry);
-      existingKeys.add(normalizedEntry);
-    }
-  });
-
-  return nextEntries.join(";");
-}
-
-function getDefinition(environment: EnvironmentKind): EnvironmentDefinition {
-  const definition = environmentDefinitions.find((item) => item.id === environment);
-
-  if (!definition) {
-    throw new Error(`未知环境：${environment}`);
-  }
-
-  return definition;
-}
-
-function getEnvVars(definition: EnvironmentDefinition, rootPath: string): Record<string, string> {
-  if (definition.id === "nvm") {
-    return {
-      NVM_HOME: rootPath,
-      NVM_SYMLINK: join(rootPath, "nodejs"),
-    };
-  }
-
-  return Object.fromEntries(definition.envVars.map((name) => [name, rootPath]));
-}
-
-function getPathEntries(definition: EnvironmentDefinition, rootPath: string): string[] {
-  return definition.pathEntries.map((entry) => (entry ? join(rootPath, entry) : rootPath));
-}
-
-function getCurrentLinkPath(config: AppConfig, environment: EnvironmentKind): string {
-  return resolve(config.globalInstallDir, ".current", environment);
-}
-
-function getManagedPathEntries(environment: EnvironmentKind, records: InstallRecord[], config: AppConfig): string[] {
-  const definition = getDefinition(environment);
-  const stablePathEntries = getPathEntries(definition, getCurrentLinkPath(config, environment));
-  return unique([...records.flatMap((record) => record.pathEntries), ...stablePathEntries]);
-}
-
-function runProcess(command: string, args: string[], timeoutMs = 30_000): Promise<RegistryProcessResult> {
-  return new Promise((resolveProcess, reject) => {
-    const child = spawn(command, args, {
-      windowsHide: true,
-    });
-    let settled = false;
-    let stdout = "";
-    let stderr = "";
-    const timeout = setTimeout(() => {
-      child.kill();
-      settle(() => reject(new Error(`${basename(command)} 执行超时。`)));
-    }, timeoutMs);
-    const settle = (callback: () => void): void => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      clearTimeout(timeout);
-      callback();
-    };
-
-    child.stdout?.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", (error) => {
-      settle(() => reject(error));
-    });
-    child.on("close", (code) => {
-      if (code === 0) {
-        settle(() => resolveProcess({ stdout, stderr }));
-        return;
-      }
-
-      settle(() => reject(new Error(`${basename(command)} 退出码 ${code}\n${stderr || stdout}`)));
-    });
-  });
-}
-
-function decodeRegistryExport(buffer: Buffer): string {
-  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
-    return buffer.subarray(2).toString("utf16le");
-  }
-
-  return buffer.toString("utf8");
-}
-
-function unescapeRegistryString(value: string): string {
-  return value.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
-}
-
-function readContinuedRegistryValue(lines: string[], startIndex: number, firstValue: string): { value: string; endIndex: number } {
-  let value = firstValue.trim();
-  let index = startIndex;
-
-  while (value.endsWith("\\") && index + 1 < lines.length) {
-    value = `${value.slice(0, -1)}${lines[index + 1].trim()}`;
-    index += 1;
-  }
-
-  return { value, endIndex: index };
-}
-
-function parseRegistryHexString(value: string): string | undefined {
-  const hexValue = value.replace(/^hex\([^)]+\):/i, "").replace(/^hex:/i, "");
-  const bytes = hexValue
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((item) => Number.parseInt(item, 16));
-
-  if (bytes.some((byte) => Number.isNaN(byte))) {
-    return undefined;
-  }
-
-  return Buffer.from(bytes).toString("utf16le").replace(/\0+$/, "");
-}
-
-function parseRegistryExportValue(content: string, name: string): string | undefined {
-  const lines = content.split(/\r?\n/);
-  const normalizedName = name.toLowerCase();
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].trim();
-    const match = /^"((?:\\"|[^"])*)"=(.+)$/.exec(line);
-
-    if (!match || unescapeRegistryString(match[1]).toLowerCase() !== normalizedName) {
-      continue;
-    }
-
-    const continuedValue = readContinuedRegistryValue(lines, index, match[2]);
-    index = continuedValue.endIndex;
-
-    const rawValue = continuedValue.value;
-    if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
-      return unescapeRegistryString(rawValue.slice(1, -1));
-    }
-
-    if (/^hex(?:\([^)]+\))?:/i.test(rawValue)) {
-      return parseRegistryHexString(rawValue);
-    }
-  }
-
-  return undefined;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return false;
-    }
-
-    throw error;
-  }
-}
-
-async function readMachineEnvironmentValue(name: string): Promise<string | undefined> {
-  const tempDir = await mkdtemp(join(tmpdir(), "env-manager-reg-"));
-  const exportFile = join(tempDir, "environment.reg");
-
-  try {
-    await runProcess("reg.exe", ["export", machineEnvironmentRegistryKey, exportFile, "/y"], 15_000);
-    return parseRegistryExportValue(decodeRegistryExport(await readFile(exportFile)), name);
-  } catch {
-    return undefined;
-  } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-  }
-}
-
-async function readRequiredMachineEnvironmentValue(name: string): Promise<string> {
-  const value = await readMachineEnvironmentValue(name);
-
-  if (typeof value !== "string") {
-    throw new Error(`读取系统环境变量 ${name} 失败，已取消写入。`);
-  }
-
-  return value;
-}
-
-async function writeMachineEnvironmentValue(name: string, value: string, type: "REG_SZ" | "REG_EXPAND_SZ"): Promise<void> {
-  await runProcess("reg.exe", ["add", machineEnvironmentRegistryKey, "/v", name, "/t", type, "/d", value, "/f"], 15_000);
-}
-
-async function deleteMachineEnvironmentValue(name: string): Promise<void> {
-  await runProcess("reg.exe", ["delete", machineEnvironmentRegistryKey, "/v", name, "/f"], 15_000);
-}
-
-async function backupMachineEnvironmentRegistry(): Promise<void> {
-  const backupDir = join(app.getPath("userData"), registryBackupDirName);
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  await mkdir(backupDir, { recursive: true });
-  await runProcess("reg.exe", ["export", machineEnvironmentRegistryKey, join(backupDir, `environment-${timestamp}.reg`), "/y"], 15_000);
-}
-
-async function registryNeedsUpdate(plan: EnvironmentApplyPlan): Promise<boolean> {
-  for (const [name, value] of Object.entries(plan.envVars)) {
-    if ((await readMachineEnvironmentValue(name)) !== value) {
-      return true;
-    }
-  }
-
-  const currentPath = await readRequiredMachineEnvironmentValue("Path");
-  return updatePathValue(currentPath, plan.removePathEntries, plan.addPathEntries) !== currentPath;
-}
-
-async function registryNeedsCleanup(plan: EnvironmentCleanupPlan): Promise<boolean> {
-  for (const [name, value] of Object.entries(plan.envVars)) {
-    if ((await readMachineEnvironmentValue(name)) === value) {
-      return true;
-    }
-  }
-
-  const currentPath = await readRequiredMachineEnvironmentValue("Path");
-  return updatePathValue(currentPath, plan.removePathEntries, []) !== currentPath;
-}
-
-function updateProcessEnvironment(envVars: Record<string, string>, pathValue: string): void {
-  Object.entries(envVars).forEach(([name, value]) => {
-    process.env[name] = value;
-  });
-
-  const pathKey = process.env.Path === undefined && process.env.PATH !== undefined ? "PATH" : "Path";
-  process.env[pathKey] = pathValue;
-}
-
-function cleanupProcessEnvironment(envVars: Record<string, string>, pathValue: string): void {
-  Object.entries(envVars).forEach(([name, value]) => {
-    if (process.env[name] === value) {
-      delete process.env[name];
-    }
-  });
-
-  const pathKey = process.env.Path === undefined && process.env.PATH !== undefined ? "PATH" : "Path";
-  process.env[pathKey] = pathValue;
-}
-
-async function applyRegistryPlan(plan: EnvironmentApplyPlan): Promise<void> {
-  const valuesToWrite: Array<{ name: string; value: string; type: "REG_SZ" | "REG_EXPAND_SZ" }> = [];
-
-  for (const [name, value] of Object.entries(plan.envVars)) {
-    if ((await readMachineEnvironmentValue(name)) !== value) {
-      valuesToWrite.push({ name, value, type: "REG_SZ" });
-    }
-  }
-
-  const currentPath = await readRequiredMachineEnvironmentValue("Path");
-  const nextPath = updatePathValue(currentPath, plan.removePathEntries, plan.addPathEntries);
-
-  if (nextPath !== currentPath) {
-    valuesToWrite.push({ name: "Path", value: nextPath, type: "REG_EXPAND_SZ" });
-  }
-
-  if (valuesToWrite.length > 0) {
-    await backupMachineEnvironmentRegistry();
-  }
-
-  for (const entry of valuesToWrite) {
-    await writeMachineEnvironmentValue(entry.name, entry.value, entry.type);
-  }
-
-  updateProcessEnvironment(plan.envVars, nextPath);
-}
-
-async function cleanupRegistryPlan(plan: EnvironmentCleanupPlan): Promise<void> {
-  const namesToDelete: string[] = [];
-
-  for (const [name, value] of Object.entries(plan.envVars)) {
-    if ((await readMachineEnvironmentValue(name)) === value) {
-      namesToDelete.push(name);
-    }
-  }
-
-  const currentPath = await readRequiredMachineEnvironmentValue("Path");
-  const nextPath = updatePathValue(currentPath, plan.removePathEntries, []);
-  const shouldWritePath = nextPath !== currentPath;
-
-  if (namesToDelete.length > 0 || shouldWritePath) {
-    await backupMachineEnvironmentRegistry();
-  }
-
-  for (const name of namesToDelete) {
-    await deleteMachineEnvironmentValue(name).catch(() => undefined);
-  }
-
-  if (shouldWritePath) {
-    await writeMachineEnvironmentValue("Path", nextPath, "REG_EXPAND_SZ");
-  }
-
-  cleanupProcessEnvironment(plan.envVars, nextPath);
-}
-
-function getActiveByKind(records: InstallRecord[]): ActiveEnvironmentMap {
-  return records.reduce<ActiveEnvironmentMap>((activeByKind, record) => {
-    if (record.active) {
-      activeByKind[record.environment] = record.id;
-    }
-
-    return activeByKind;
-  }, {});
-}
 
 export class EnvironmentRecordService {
   private readonly store = new JsonFileStore<EnvironmentData>(
     join(app.getPath("userData"), "environments.json"),
-    defaults,
+    defaultEnvironmentData,
   );
 
   constructor(private readonly configService: ConfigService) {}
 
-  async getSummary(): Promise<EnvironmentSummary> {
+  private async readData(): Promise<EnvironmentData> {
     const data = await this.store.read();
+    return {
+      installations: data.installations.map(normalizeInstallRecord),
+    };
+  }
+
+  async getSummary(): Promise<EnvironmentSummary> {
+    const data = await this.readData();
 
     return {
       definitions: environmentDefinitions,
@@ -403,7 +66,7 @@ export class EnvironmentRecordService {
       return true;
     }
 
-    const data = await this.store.read();
+    const data = await this.readData();
     const definition = getDefinition(environment);
     const currentLinkPath = getCurrentLinkPath(config, environment);
     return registryNeedsUpdate({
@@ -414,7 +77,7 @@ export class EnvironmentRecordService {
   }
 
   async requiresElevationForSetActive(environment: EnvironmentKind, id: string): Promise<boolean> {
-    const data = await this.store.read();
+    const data = await this.readData();
     const selectedRecord = this.getSelectedRecord(data.installations, environment, id);
     const environmentRecords = data.installations.filter((record) => record.environment === environment);
     const config = await this.configService.get();
@@ -422,7 +85,7 @@ export class EnvironmentRecordService {
   }
 
   async requiresElevationForUninstall(id: string): Promise<boolean> {
-    const data = await this.store.read();
+    const data = await this.readData();
     const record = data.installations.find((item) => item.id === id);
 
     if (!record) {
@@ -433,9 +96,14 @@ export class EnvironmentRecordService {
     const remainingRecords = data.installations.filter((item) => item.id !== id);
     const remainingSameEnvironmentRecords = remainingRecords.filter((item) => item.environment === record.environment);
     const replacementRecord = record.active ? remainingSameEnvironmentRecords[0] : undefined;
+    const shouldDeleteDirectory = record.uninstallPolicy === "delete-directory";
 
     if (replacementRecord) {
       return registryNeedsUpdate(this.createApplyPlan(replacementRecord, remainingSameEnvironmentRecords, config));
+    }
+
+    if (!shouldDeleteDirectory) {
+      return false;
     }
 
     return registryNeedsCleanup(
@@ -444,7 +112,7 @@ export class EnvironmentRecordService {
   }
 
   async setActive(environment: EnvironmentKind, id: string): Promise<EnvironmentSummary> {
-    const data = await this.store.read();
+    const data = await this.readData();
     const selectedRecord = this.getSelectedRecord(data.installations, environment, id);
     const environmentRecords = data.installations.filter((record) => record.environment === environment);
     await this.applyActiveEnvironment(selectedRecord, environmentRecords);
@@ -473,7 +141,7 @@ export class EnvironmentRecordService {
     pathEntries: string[];
   }): Promise<InstallRecord> {
     const now = new Date().toISOString();
-    const currentData = await this.store.read();
+    const currentData = await this.readData();
     const record: InstallRecord = {
       id: crypto.randomUUID(),
       environment: input.environment,
@@ -483,6 +151,8 @@ export class EnvironmentRecordService {
       installPath: input.installPath,
       scope: input.scope,
       managed: true,
+      ownership: "managed",
+      uninstallPolicy: "delete-directory",
       active: input.active,
       envVars: input.envVars,
       pathEntries: input.pathEntries,
@@ -510,30 +180,68 @@ export class EnvironmentRecordService {
     return record;
   }
 
+  async adoptExistingInstalls(inputs: AdoptEnvironmentInput[]): Promise<EnvironmentSummary> {
+    const now = new Date().toISOString();
+    const adoptedRecords = inputs.map<InstallRecord>((input) => ({
+      id: crypto.randomUUID(),
+      environment: input.environment,
+      name: input.name,
+      vendor: input.vendor,
+      version: input.version,
+      installPath: input.installPath,
+      scope: "custom",
+      managed: false,
+      ownership: input.ownership,
+      uninstallPolicy: input.uninstallPolicy,
+      discoverySource: input.source,
+      active: input.active,
+      envVars: input.envVars,
+      pathEntries: input.pathEntries,
+      installedAt: now,
+      updatedAt: now,
+    }));
+
+    await this.store.update((current) => {
+      const normalizedInstallations = current.installations.map(normalizeInstallRecord);
+
+      return {
+        installations: [
+          ...adoptedRecords,
+          ...normalizedInstallations.map((record) => {
+            const replacement = adoptedRecords.find((item) => item.active && item.environment === record.environment);
+            return replacement ? { ...record, active: false } : record;
+          }),
+        ],
+      };
+    });
+
+    return this.getSummary();
+  }
+
   async uninstallManaged(id: string): Promise<EnvironmentSummary> {
-    const data = await this.store.read();
+    const data = await this.readData();
     const record = data.installations.find((item) => item.id === id);
 
     if (!record) {
       throw new Error("未找到要卸载的环境。");
     }
 
-    if (!record.managed) {
-      throw new Error("只能卸载本程序安装和管理的环境。");
-    }
-
     const config = await this.configService.get();
     const remainingRecords = data.installations.filter((item) => item.id !== id);
     const remainingSameEnvironmentRecords = remainingRecords.filter((item) => item.environment === record.environment);
     const replacementRecord = record.active ? remainingSameEnvironmentRecords[0] : undefined;
+    const shouldDeleteDirectory = record.uninstallPolicy === "delete-directory";
 
     if (replacementRecord) {
       await this.applyActiveEnvironment(replacementRecord, remainingSameEnvironmentRecords);
-    } else {
+    } else if (shouldDeleteDirectory) {
       await this.cleanupRemovedRecord(record, remainingSameEnvironmentRecords, data.installations, config);
     }
 
-    await rm(record.installPath, { recursive: true, force: true });
+    if (shouldDeleteDirectory) {
+      await rm(record.installPath, { recursive: true, force: true });
+    }
+
     const now = new Date().toISOString();
 
     await this.store.update((current) => ({

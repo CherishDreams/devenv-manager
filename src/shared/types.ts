@@ -1,4 +1,27 @@
-export type EnvironmentKind = "java" | "python" | "conda" | "go" | "node" | "nvm" | "maven";
+export type EnvironmentKind =
+  | "java"
+  | "python"
+  | "conda"
+  | "go"
+  | "node"
+  | "nvm"
+  | "maven"
+  | "gradle"
+  | "cmake"
+  | "ninja"
+  | "cpp"
+  | "lua"
+  | "rust"
+  | "dotnet"
+  | "php"
+  | "ruby"
+  | "flutter"
+  | "android"
+  | "mysql"
+  | "postgresql"
+  | "mongodb"
+  | "redis"
+  | "sqlite";
 
 export type InstallScope = "global" | "custom";
 
@@ -6,8 +29,18 @@ export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancel
 
 export type EnvironmentManagementMode = "symlink" | "direct";
 
+export type EnvironmentOwnership = "managed" | "adopted" | "external";
+
+export type UninstallPolicy = "delete-directory" | "remove-record-only" | "manual";
+
+export type NavigationLayout = "sidebar" | "rail";
+
 export interface EnvironmentManagementSettings {
   mode: EnvironmentManagementMode;
+}
+
+export interface AppearanceSettings {
+  navigationLayout: NavigationLayout;
 }
 
 export interface VendorOption {
@@ -68,12 +101,29 @@ export interface MirrorSettings {
   node: string;
   nvm: string;
   maven: string;
+  gradle: string;
+  cmake: string;
+  ninja: string;
+  cpp: string;
+  lua: string;
+  rust: string;
+  dotnet: string;
+  php: string;
+  ruby: string;
+  flutter: string;
+  android: string;
+  mysql: string;
+  postgresql: string;
+  mongodb: string;
+  redis: string;
+  sqlite: string;
 }
 
 export interface AppConfig {
   globalInstallDir: string;
   downloadCacheDir: string;
   retainDownloads: boolean;
+  appearance: AppearanceSettings;
   environmentManagement: EnvironmentManagementSettings;
   proxy: ProxySettings;
   mirrors: MirrorSettings;
@@ -87,7 +137,10 @@ export interface InstallRecord {
   version: string;
   installPath: string;
   scope: InstallScope;
-  managed: true;
+  managed: boolean;
+  ownership: EnvironmentOwnership;
+  uninstallPolicy: UninstallPolicy;
+  discoverySource?: string;
   active: boolean;
   envVars: Record<string, string>;
   pathEntries: string[];
@@ -121,6 +174,34 @@ export interface InstallTaskInput {
   configureSystemEnv: boolean;
 }
 
+export interface DiscoveredEnvironment {
+  id: string;
+  environment: EnvironmentKind;
+  name: string;
+  vendor?: string;
+  version: string;
+  installPath: string;
+  envVars: Record<string, string>;
+  pathEntries: string[];
+  source: string;
+  active: boolean;
+  alreadyManaged: boolean;
+}
+
+export interface AdoptEnvironmentInput {
+  environment: EnvironmentKind;
+  name: string;
+  vendor?: string;
+  version: string;
+  installPath: string;
+  envVars: Record<string, string>;
+  pathEntries: string[];
+  source: string;
+  active: boolean;
+  ownership: Extract<EnvironmentOwnership, "adopted" | "external">;
+  uninstallPolicy: Extract<UninstallPolicy, "remove-record-only" | "manual">;
+}
+
 export interface TaskLogEntry {
   at: string;
   level: "info" | "warn" | "error";
@@ -145,6 +226,7 @@ export interface ManagedTask {
   progress: number;
   createdAt: string;
   updatedAt: string;
+  input?: InstallTaskInput;
   download?: TaskDownloadProgress;
   logs: TaskLogEntry[];
 }
