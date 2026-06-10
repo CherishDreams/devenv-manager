@@ -15,6 +15,7 @@ import { envManagerApi } from "../api/envManagerApi";
 import { useCatalogStore } from "../stores/catalogStore";
 import { useConfigStore } from "../stores/configStore";
 import { useUiStore } from "../stores/uiStore";
+import { themeOptions, type ThemeStyle } from "../theme/themeDefinitions";
 
 type ConfigFormValues = Partial<AppConfig>;
 type SettingsTabKey = "general" | "network" | "data" | "about";
@@ -155,15 +156,12 @@ export default function SettingsPage(): React.ReactElement {
       />
       <SettingsRow
         title="应用主题"
-        description="切换纯色或炫彩模式"
+        description="切换默认或液态玻璃效果"
         control={
           <Select
             value={themeStyle}
-            onChange={setThemeStyle}
-            options={[
-              { value: "solid", label: "纯色主题" },
-              { value: "vibrant", label: "炫彩主题" },
-            ]}
+            onChange={(value: ThemeStyle) => setThemeStyle(value)}
+            options={themeOptions}
             className="settings-control"
           />
         }

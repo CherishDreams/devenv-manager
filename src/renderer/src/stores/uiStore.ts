@@ -1,19 +1,24 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { defaultThemeStyle, normalizeThemeStyle, type ThemeStyle } from "../theme/themeDefinitions";
 
 interface UiState {
-  themeStyle: "solid" | "vibrant";
-  setThemeStyle: (style: "solid" | "vibrant") => void;
+  themeStyle: ThemeStyle;
+  setThemeStyle: (style: ThemeStyle) => void;
 }
 
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
-      themeStyle: "solid",
+      themeStyle: defaultThemeStyle,
       setThemeStyle: (style) => set({ themeStyle: style }),
     }),
     {
       name: "ui-storage",
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        themeStyle: normalizeThemeStyle((persistedState as Partial<UiState> | undefined)?.themeStyle),
+      }),
     }
   )
 );

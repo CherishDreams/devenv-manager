@@ -18,7 +18,7 @@ DevEnv Manager is a desktop tool for installing, adopting, switching and removin
   - Direct mode: write environment variables directly.
 - Adopt existing system environments without deleting their original directories.
 - Remove only environments installed by this app, or only remove adoption records for adopted environments.
-- Solid and vibrant UI themes.
+- Default and liquid-glass UI themes.
 
 ## Supported Environments
 

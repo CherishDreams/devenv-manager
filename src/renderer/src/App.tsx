@@ -16,6 +16,7 @@ import { useSystemStore } from "./stores/systemStore";
 import { useTaskStore } from "./stores/taskStore";
 import { useUiStore } from "./stores/uiStore";
 import { AppLogo } from "./components/AppLogo";
+import { getThemeDefinition, themeBodyClasses } from "./theme/themeDefinitions";
 
 type PageKey = "dashboard" | "installed" | "environments" | "logs" | "settings";
 
@@ -75,15 +76,17 @@ function renderPage(pageKey: PageKey): React.ReactNode {
 function HeaderStatus(): React.ReactElement {
   const runningTaskCount = useTaskStore((state) => state.tasks.filter((task) => task.status === "running").length);
   const { themeStyle, setThemeStyle } = useUiStore();
+  const isLiquidGlass = themeStyle === "liquidGlass";
+  const nextTheme = getThemeDefinition(isLiquidGlass ? "default" : "liquidGlass");
 
   return (
     <div className="header-status">
-      <Tooltip title="切换炫彩主题">
+      <Tooltip title={`切换${nextTheme.label}`}>
         <Switch
           checkedChildren={<BgColorsOutlined />}
           unCheckedChildren={<BgColorsOutlined />}
-          checked={themeStyle === "vibrant"}
-          onChange={(checked) => setThemeStyle(checked ? "vibrant" : "solid")}
+          checked={isLiquidGlass}
+          onChange={(checked) => setThemeStyle(checked ? "liquidGlass" : "default")}
         />
       </Tooltip>
       <Tooltip title="运行中的任务">
@@ -226,25 +229,17 @@ export default function App(): React.ReactElement {
 
   const { themeStyle } = useUiStore();
   const navigationLayout = config?.appearance?.navigationLayout ?? "sidebar";
+  const themeDefinition = getThemeDefinition(themeStyle);
 
   useEffect(() => {
-    if (themeStyle === "vibrant") {
-      document.body.classList.add("theme-vibrant");
-    } else {
-      document.body.classList.remove("theme-vibrant");
-    }
-  }, [themeStyle]);
+    document.body.classList.remove(...themeBodyClasses);
+    document.body.classList.add(themeDefinition.bodyClass);
+  }, [themeDefinition.bodyClass]);
 
   const themeConfig = useMemo(() => {
-    const isVibrant = themeStyle === "vibrant";
     return {
       token: {
-        borderRadius: 8,
-        colorPrimary: "#1668dc",
-        fontFamily:
-          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        colorBgContainer: isVibrant ? "rgba(255, 255, 255, 0.4)" : "#ffffff",
-        colorBgElevated: isVibrant ? "rgba(255, 255, 255, 0.8)" : "#ffffff",
+        ...themeDefinition.token,
       },
       components: {
         Button: {
@@ -255,7 +250,7 @@ export default function App(): React.ReactElement {
         },
       },
     };
-  }, [themeStyle]);
+  }, [themeDefinition]);
 
   return (
     <ConfigProvider theme={themeConfig}>
