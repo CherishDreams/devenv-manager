@@ -8,6 +8,7 @@ import { EnvironmentLogo } from "../../components/EnvironmentLogo";
 import { EnvironmentCard } from "./EnvironmentCard";
 import { getEnvironmentStatus, groupDefinitions } from "./environmentInstallHelpers";
 import { OperationArea } from "./OperationArea";
+import { useConfigStore } from "../../stores/configStore";
 
 export function InstallCatalog({
   definitions,
@@ -26,6 +27,7 @@ export function InstallCatalog({
   columns: TableColumnsType<InstallRecord>;
   loading: boolean;
 }): React.ReactElement {
+  const config = useConfigStore((s) => s.config);
   const groupedDefinitions = useMemo(() => groupDefinitions(definitions), [definitions]);
 
   if (definitions.length === 0) {
@@ -72,14 +74,14 @@ export function InstallCatalog({
 
   return (
     <div className="page-stack">
-      <div className="page-title-row">
-        <div>
-          <Typography.Title level={3}>环境安装</Typography.Title>
+      <div>
+        <Typography.Title level={3}>环境安装</Typography.Title>
+        <Space>
           <Typography.Text type="secondary">选择环境后配置发行商、版本和安装路径</Typography.Text>
-        </div>
-        <Tag icon={<CloudDownloadOutlined />} color="blue">
-          测试目录 E:/dev_env
-        </Tag>
+          <Tag icon={<CloudDownloadOutlined />} color="blue">
+            {config?.globalInstallDir ?? "未配置"}
+          </Tag>
+        </Space>
       </div>
 
       {groupedDefinitions.map(([group, groupItems]) => (

@@ -268,10 +268,6 @@ export default function App(): React.ReactElement {
                   <Typography.Title level={3}>{pageTitles[pageKey]}</Typography.Title>
                   <Typography.Text>DevEnv Manager</Typography.Text>
                 </div>
-                <div className="top-announcement">
-                  <span className="announcement-badge">本地</span>
-                  <Typography.Text ellipsis>Windows 开发环境集中管理</Typography.Text>
-                </div>
                 <HeaderStatus />
               </header>
             ) : null}
