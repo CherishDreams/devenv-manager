@@ -6,9 +6,9 @@ import { app } from "electron";
 import { getErrorMessage, parseJsonAs } from "../../shared/errorUtils";
 import { psQuote } from "./common/shellUtils";
 
-export type ElevatedEnvironmentOperation
-  = | { type: "set-active"; environment: EnvironmentKind; id: string }
-    | { type: "uninstall"; id: string };
+export type ElevatedEnvironmentOperation =
+  | { type: "set-active"; environment: EnvironmentKind; id: string }
+  | { type: "uninstall"; id: string };
 
 type ElevatedBrokerCommand = ElevatedEnvironmentOperation | { type: "ping" } | { type: "shutdown" };
 

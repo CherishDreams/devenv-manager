@@ -1,0 +1,10 @@
+node_modules/
+out/
+release/
+build/
+dist/
+coverage/
+*.config.js
+eslint.config.js
+*.md
+pnpm-lock.yaml

@@ -27,14 +27,14 @@ function getFirstJsonObject(raw: string): string | undefined {
         escaped = false;
       } else if (char === "\\") {
         escaped = true;
-      } else if (char === "\"") {
+      } else if (char === '"') {
         inString = false;
       }
 
       continue;
     }
 
-    if (char === "\"") {
+    if (char === '"') {
       inString = true;
       continue;
     }
@@ -94,7 +94,10 @@ export class JsonFileStore<TData extends object> {
   }
 
   async write(data: TData): Promise<TData> {
-    const writeOperation = this.writeQueue.then(() => this.writeNow(data), () => this.writeNow(data));
+    const writeOperation = this.writeQueue.then(
+      () => this.writeNow(data),
+      () => this.writeNow(data),
+    );
     this.writeQueue = writeOperation.then(
       () => undefined,
       () => undefined,

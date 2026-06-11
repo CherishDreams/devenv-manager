@@ -8,8 +8,8 @@ export function resolveRustResource(input: InstallTaskInput, config: AppConfig):
   }
 
   const configuredMirror = config.mirrors.rust.trim();
-  const baseUrl
-    = configuredMirror && configuredMirror !== "official"
+  const baseUrl =
+    configuredMirror && configuredMirror !== "official"
       ? configuredMirror.replace(/\/+$/, "")
       : "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc";
 

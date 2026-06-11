@@ -114,7 +114,7 @@ body.theme-vibrant {
 
 body.theme-vibrant::before,
 body.theme-vibrant::after {
-  content: '';
+  content: "";
   position: absolute;
   border-radius: 50%;
   filter: blur(90px);
@@ -1009,7 +1009,7 @@ body.theme-default::after {
 
 body.theme-liquid-glass::before,
 body.theme-liquid-glass::after {
-  content: '';
+  content: "";
   position: absolute;
   border-radius: 50%;
   filter: blur(120px);
@@ -1664,7 +1664,7 @@ body.theme-vibrant .classic-sidebar {
   height: 18px;
   border-radius: 999px;
   background: #1769e8;
-  content: '';
+  content: "";
 }
 
 .settings-segmented-tabs {

@@ -23,6 +23,13 @@ export async function listFlutterVersions(config: AppConfig): Promise<AvailableV
     .filter((release) => release.channel === "stable" && release.archive.endsWith(".zip"))
     .slice(0, maxVersionOptions)
     .map((release, index) =>
-      createVersion("flutter", "google", release.version, `Flutter ${release.version}`, index === 0 ? "current" : "stable", "archive"),
+      createVersion(
+        "flutter",
+        "google",
+        release.version,
+        `Flutter ${release.version}`,
+        index === 0 ? "current" : "stable",
+        "archive",
+      ),
     );
 }

@@ -83,7 +83,11 @@ export function getCurrentLinkPath(config: AppConfig, environment: EnvironmentKi
   return resolve(config.globalInstallDir, ".current", environment);
 }
 
-export function getManagedPathEntries(environment: EnvironmentKind, records: InstallRecord[], config: AppConfig): string[] {
+export function getManagedPathEntries(
+  environment: EnvironmentKind,
+  records: InstallRecord[],
+  config: AppConfig,
+): string[] {
   const definition = getDefinition(environment);
   const stablePathEntries = getPathEntries(definition, getCurrentLinkPath(config, environment));
   return unique([...records.flatMap((record) => record.pathEntries), ...stablePathEntries]);

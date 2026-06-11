@@ -23,7 +23,8 @@ const envManagerApi = {
     getStatus: (): Promise<SystemStatus> => ipcRenderer.invoke("system:get-status"),
   },
   permissions: {
-    check: (input: PrivilegeCheckInput): Promise<PrivilegeRequirement> => ipcRenderer.invoke("permissions:check", input),
+    check: (input: PrivilegeCheckInput): Promise<PrivilegeRequirement> =>
+      ipcRenderer.invoke("permissions:check", input),
   },
   environments: {
     getSummary: (): Promise<EnvironmentSummary> => ipcRenderer.invoke("environments:get-summary"),
@@ -59,7 +60,8 @@ const envManagerApi = {
     },
   },
   catalog: {
-    listVersions: (query: VersionCatalogQuery): Promise<AvailableVersion[]> => ipcRenderer.invoke("catalog:list-versions", query),
+    listVersions: (query: VersionCatalogQuery): Promise<AvailableVersion[]> =>
+      ipcRenderer.invoke("catalog:list-versions", query),
   },
   dialog: {
     selectDirectory: (): Promise<string | undefined> => ipcRenderer.invoke("dialog:select-directory"),

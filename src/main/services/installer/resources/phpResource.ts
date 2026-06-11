@@ -8,8 +8,10 @@ export function resolvePhpResource(input: InstallTaskInput, config: AppConfig): 
   }
 
   const configuredMirror = config.mirrors.php.trim();
-  const baseUrl
-    = configuredMirror && configuredMirror !== "official" ? configuredMirror.replace(/\/+$/, "") : "https://windows.php.net/downloads/releases";
+  const baseUrl =
+    configuredMirror && configuredMirror !== "official"
+      ? configuredMirror.replace(/\/+$/, "")
+      : "https://windows.php.net/downloads/releases";
   const fileName = `php-${input.version}-Win32-vs17-x64.zip`;
 
   return {

@@ -12,7 +12,20 @@ import {
   SyncOutlined,
 } from "@ant-design/icons";
 import { getErrorMessage } from "@shared/errorUtils";
-import { App as AntdApp, Badge, Button, Empty, List, Modal, Progress, Space, Table, Tag, Tooltip, Typography } from "antd";
+import {
+  App as AntdApp,
+  Badge,
+  Button,
+  Empty,
+  List,
+  Modal,
+  Progress,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+} from "antd";
 import { useCallback, useMemo, useState } from "react";
 import { usePrivilegeGuard } from "../hooks/usePrivilegeGuard";
 import { useTaskStore } from "../stores/taskStore";
@@ -47,13 +60,6 @@ const statusMeta: Record<TaskStatus, { text: string; color: string; icon: React.
 
 const taskPageSize = 8;
 const logPageSize = 12;
-
-const taskTablePagination: TableProps<ManagedTask>["pagination"] = {
-  pageSize: taskPageSize,
-  showSizeChanger: true,
-  pageSizeOptions: [String(taskPageSize), "15", "30"],
-  showTotal: (total) => `共 ${total} 条`,
-};
 
 const logListPagination = {
   pageSize: logPageSize,
@@ -100,7 +106,13 @@ function formatSpeed(value: number): string {
   return `${formatBytes(value)}/s`;
 }
 
-function DownloadSummary({ download, compact = false }: { download?: TaskDownloadProgress; compact?: boolean }): React.ReactElement {
+function DownloadSummary({
+  download,
+  compact = false,
+}: {
+  download?: TaskDownloadProgress;
+  compact?: boolean;
+}): React.ReactElement {
   if (!download) {
     return <Typography.Text type="secondary">-</Typography.Text>;
   }
@@ -130,20 +142,62 @@ export default function LogsPage(): React.ReactElement {
   const { message, modal } = AntdApp.useApp();
   const { runWithPrivilege } = usePrivilegeGuard();
   const [logTaskId, setLogTaskId] = useState<string>();
+  const [activePageSize, setActivePageSize] = useState(taskPageSize);
+  const [historyPageSize, setHistoryPageSize] = useState(taskPageSize);
 
-  const activeTasks = useMemo(() => tasks.filter((task) => task.status === "queued" || task.status === "running"), [tasks]);
-  const historyTasks = useMemo(() => tasks.filter((task) => task.status !== "queued" && task.status !== "running"), [tasks]);
+  const activeTasks = useMemo(
+    () => tasks.filter((task) => task.status === "queued" || task.status === "running"),
+    [tasks],
+  );
+  const historyTasks = useMemo(
+    () => tasks.filter((task) => task.status !== "queued" && task.status !== "running"),
+    [tasks],
+  );
   const logTask = useMemo(() => tasks.find((task) => task.id === logTaskId), [logTaskId, tasks]);
-  const activePagination = activeTasks.length > taskPageSize ? taskTablePagination : false;
-  const historyPagination = historyTasks.length > taskPageSize ? taskTablePagination : false;
+  const activePagination = useMemo<TableProps<ManagedTask>["pagination"]>(
+    () =>
+      activeTasks.length > taskPageSize
+        ? {
+            pageSize: activePageSize,
+            showSizeChanger: true,
+            pageSizeOptions: [String(taskPageSize), "15", "30"],
+            showTotal: (total) => `共 ${total} 条`,
+            onChange: (_page, size) => {
+              if (size !== activePageSize) {
+                setActivePageSize(size);
+              }
+            },
+          }
+        : false,
+    [activeTasks.length, activePageSize],
+  );
+  const historyPagination = useMemo<TableProps<ManagedTask>["pagination"]>(
+    () =>
+      historyTasks.length > taskPageSize
+        ? {
+            pageSize: historyPageSize,
+            showSizeChanger: true,
+            pageSizeOptions: [String(taskPageSize), "15", "30"],
+            showTotal: (total) => `共 ${total} 条`,
+            onChange: (_page, size) => {
+              if (size !== historyPageSize) {
+                setHistoryPageSize(size);
+              }
+            },
+          }
+        : false,
+    [historyTasks.length, historyPageSize],
+  );
 
   const handleRetryTask = useCallback(
     async (record: ManagedTask) => {
       try {
-        const task = await runWithPrivilege({ type: "retry", id: record.id }, (authorized) => retry(record.id, authorized));
+        const task = await runWithPrivilege({ type: "retry", id: record.id }, (authorized) =>
+          retry(record.id, authorized),
+        );
 
         if (task) {
-          message.success(`已重新创建 ${record.title} 的安装任务`);
+          message.success(`已开始重试 ${record.title} 任务`);
         }
       } catch (error) {
         message.error(getErrorMessage(error));
@@ -250,50 +304,44 @@ export default function LogsPage(): React.ReactElement {
                   }}
                 />
               </Tooltip>
-              {record.status === "failed"
-                ? (
-                    <Tooltip title="重试任务">
-                      <Button
-                        size="small"
-                        icon={<ReloadOutlined />}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void handleRetryTask(record);
-                        }}
-                      />
-                    </Tooltip>
-                  )
-                : null}
-              {cancellable
-                ? (
-                    <Tooltip title="取消任务">
-                      <Button
-                        danger
-                        size="small"
-                        icon={<StopOutlined />}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void cancel(record.id).then(() => message.success("任务已取消"));
-                        }}
-                      />
-                    </Tooltip>
-                  )
-                : null}
-              {removable
-                ? (
-                    <Tooltip title="移除记录">
-                      <Button
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleRemoveTask(record);
-                        }}
-                      />
-                    </Tooltip>
-                  )
-                : null}
+              {record.status === "failed" ? (
+                <Tooltip title="重试任务">
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleRetryTask(record);
+                    }}
+                  />
+                </Tooltip>
+              ) : null}
+              {cancellable ? (
+                <Tooltip title="取消任务">
+                  <Button
+                    danger
+                    size="small"
+                    icon={<StopOutlined />}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void cancel(record.id).then(() => message.success("任务已取消"));
+                    }}
+                  />
+                </Tooltip>
+              ) : null}
+              {removable ? (
+                <Tooltip title="移除记录">
+                  <Button
+                    danger
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRemoveTask(record);
+                    }}
+                  />
+                </Tooltip>
+              ) : null}
             </Space>
           );
         },
@@ -321,6 +369,7 @@ export default function LogsPage(): React.ReactElement {
           <Badge count={activeTasks.length} />
         </div>
         <Table
+          key={`${activeTasks.length}-${activePageSize}`}
           rowKey="id"
           loading={loading}
           columns={columns}
@@ -344,6 +393,7 @@ export default function LogsPage(): React.ReactElement {
           </Space>
         </div>
         <Table
+          key={`${historyTasks.length}-${historyPageSize}`}
           rowKey="id"
           loading={loading}
           columns={columns}
@@ -361,31 +411,30 @@ export default function LogsPage(): React.ReactElement {
         footer={null}
         onCancel={() => setLogTaskId(undefined)}
       >
-        {logTask
-          ? (
-              <div className="task-detail-stack">
-                <DownloadSummary download={logTask.download} />
-                <List
-                  dataSource={logTask.logs}
-                  pagination={logTask.logs.length > logPageSize ? logListPagination : false}
-                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" /> }}
-                  renderItem={(entry) => (
-                    <List.Item>
-                      <Space>
-                        <Tag color={entry.level === "error" ? "red" : entry.level === "warn" ? "orange" : "blue"}>
-                          {entry.level}
-                        </Tag>
-                        <Typography.Text type="secondary">{new Date(entry.at).toLocaleString()}</Typography.Text>
-                        <Typography.Text>{entry.message}</Typography.Text>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
-              </div>
-            )
-          : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" />
-            )}
+        {logTask ? (
+          <div className="task-detail-stack">
+            <DownloadSummary download={logTask.download} />
+            <List
+              key={logTask.id}
+              dataSource={logTask.logs}
+              pagination={logTask.logs.length > logPageSize ? logListPagination : false}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" /> }}
+              renderItem={(entry) => (
+                <List.Item>
+                  <Space>
+                    <Tag color={entry.level === "error" ? "red" : entry.level === "warn" ? "orange" : "blue"}>
+                      {entry.level}
+                    </Tag>
+                    <Typography.Text type="secondary">{new Date(entry.at).toLocaleString()}</Typography.Text>
+                    <Typography.Text>{entry.message}</Typography.Text>
+                  </Space>
+                </List.Item>
+              )}
+            />
+          </div>
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" />
+        )}
       </Modal>
     </div>
   );

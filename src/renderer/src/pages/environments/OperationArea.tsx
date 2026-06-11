@@ -4,7 +4,20 @@ import type { VersionSelectOption } from "./environmentInstallHelpers";
 import { CloudDownloadOutlined, FolderOpenOutlined, ReloadOutlined } from "@ant-design/icons";
 import { createDefaultDatabaseInstallConfig, isConfigurableDatabaseEnvironment } from "@shared/databaseInstallConfig";
 import { getErrorMessage } from "@shared/errorUtils";
-import { Alert, App as AntdApp, Button, Card, Checkbox, Empty, Input, Radio, Select, Space, Steps, Typography } from "antd";
+import {
+  Alert,
+  App as AntdApp,
+  Button,
+  Card,
+  Checkbox,
+  Empty,
+  Input,
+  Radio,
+  Select,
+  Space,
+  Steps,
+  Typography,
+} from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { envManagerApi } from "../../api/envManagerApi";
 import { usePrivilegeGuard } from "../../hooks/usePrivilegeGuard";
@@ -17,7 +30,6 @@ import {
   filterVersionOption,
   getCatalogKey,
   getSuggestedInstallPath,
-
 } from "./environmentInstallHelpers";
 import { MirrorSourceControl } from "./MirrorSourceControl";
 import { VendorList } from "./VendorList";
@@ -56,7 +68,7 @@ export function OperationArea({ definition }: { definition: EnvironmentDefinitio
   }, [definition]);
 
   const catalogKey = selectedVendorId ? getCatalogKey(definition.id, selectedVendorId) : "";
-  const versions = selectedVendorId ? versionsByKey[catalogKey] ?? [] : [];
+  const versions = selectedVendorId ? (versionsByKey[catalogKey] ?? []) : [];
   const loading = selectedVendorId ? Boolean(loadingByKey[catalogKey]) : false;
   const error = selectedVendorId ? errorByKey[catalogKey] : undefined;
 
@@ -72,7 +84,8 @@ export function OperationArea({ definition }: { definition: EnvironmentDefinitio
   const versionSelectOptions = useMemo(() => versions.map(createVersionSelectOption), [versions]);
 
   const suggestedInstallPath = useMemo(
-    () => getSuggestedInstallPath(config?.globalInstallDir ?? "E:\\dev_env", definition, selectedVendorId, selectedVersion),
+    () =>
+      getSuggestedInstallPath(config?.globalInstallDir ?? "E:\\dev_env", definition, selectedVendorId, selectedVersion),
     [config?.globalInstallDir, definition, selectedVendorId, selectedVersion],
   );
 
@@ -102,8 +115,13 @@ export function OperationArea({ definition }: { definition: EnvironmentDefinitio
     }
 
     try {
-      const nextVersions = await loadVersions({ environment: definition.id, vendor: selectedVendorId }, { force: true });
-      setSelectedVersionId((current) => (nextVersions.some((version) => version.id === current) ? current : nextVersions[0]?.id));
+      const nextVersions = await loadVersions(
+        { environment: definition.id, vendor: selectedVendorId },
+        { force: true },
+      );
+      setSelectedVersionId((current) =>
+        nextVersions.some((version) => version.id === current) ? current : nextVersions[0]?.id,
+      );
 
       if (nextVersions.length > 0) {
         message.success(`版本获取完成，共 ${nextVersions.length} 个可安装版本`);
@@ -162,7 +180,13 @@ export function OperationArea({ definition }: { definition: EnvironmentDefinitio
           <Steps
             size="small"
             current={stepCurrent}
-            items={[{ title: "发行商" }, { title: "下载源" }, { title: "版本" }, { title: "配置" }, { title: "创建任务" }]}
+            items={[
+              { title: "发行商" },
+              { title: "下载源" },
+              { title: "版本" },
+              { title: "配置" },
+              { title: "创建任务" },
+            ]}
           />
 
           <MirrorSourceControl
@@ -182,27 +206,25 @@ export function OperationArea({ definition }: { definition: EnvironmentDefinitio
 
             {error ? <Alert type="error" showIcon message={error} /> : null}
 
-            {versions.length > 0
-              ? (
-                  <Select<string, VersionSelectOption>
-                    className="version-select"
-                    popupClassName="version-select-popup"
-                    showSearch
-                    allowClear
-                    value={selectedVersionId}
-                    options={versionSelectOptions}
-                    loading={loading}
-                    placeholder="选择版本"
-                    optionFilterProp="searchText"
-                    filterOption={filterVersionOption}
-                    optionRender={(option) => <VersionOption version={option.data.version} />}
-                    onChange={(value) => setSelectedVersionId(value)}
-                    onClear={() => setSelectedVersionId(undefined)}
-                  />
-                )
-              : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loading ? "正在获取版本" : "暂无版本数据"} />
-                )}
+            {versions.length > 0 ? (
+              <Select<string, VersionSelectOption>
+                className="version-select"
+                popupClassName="version-select-popup"
+                showSearch
+                allowClear
+                value={selectedVersionId}
+                options={versionSelectOptions}
+                loading={loading}
+                placeholder="选择版本"
+                optionFilterProp="searchText"
+                filterOption={filterVersionOption}
+                optionRender={(option) => <VersionOption version={option.data.version} />}
+                onChange={(value) => setSelectedVersionId(value)}
+                onClear={() => setSelectedVersionId(undefined)}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loading ? "正在获取版本" : "暂无版本数据"} />
+            )}
           </div>
 
           <div className="operation-section">
@@ -217,32 +239,42 @@ export function OperationArea({ definition }: { definition: EnvironmentDefinitio
                 ]}
               />
 
-              {scope === "global"
-                ? (
-                    <Alert type="info" showIcon message={suggestedInstallPath} />
-                  )
-                : (
-                    <Input
-                      value={customPath}
-                      onChange={(event) => setCustomPath(event.target.value)}
-                      placeholder={suggestedInstallPath}
-                      addonAfter={
-                        <Button type="text" size="small" icon={<FolderOpenOutlined />} onClick={() => void handleSelectDirectory()} />
-                      }
+              {scope === "global" ? (
+                <Alert type="info" showIcon message={suggestedInstallPath} />
+              ) : (
+                <Input
+                  value={customPath}
+                  onChange={(event) => setCustomPath(event.target.value)}
+                  placeholder={suggestedInstallPath}
+                  addonAfter={
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<FolderOpenOutlined />}
+                      onClick={() => void handleSelectDirectory()}
                     />
-                  )}
+                  }
+                />
+              )}
 
               <Checkbox checked={configureSystemEnv} onChange={(event) => setConfigureSystemEnv(event.target.checked)}>
                 配置系统环境变量
               </Checkbox>
 
-              {isConfigurableDatabaseEnvironment(definition.id) && databaseConfig
-                ? (
-                    <DatabaseInstallSettings environment={definition.id} value={databaseConfig} onChange={setDatabaseConfig} />
-                  )
-                : null}
+              {isConfigurableDatabaseEnvironment(definition.id) && databaseConfig ? (
+                <DatabaseInstallSettings
+                  environment={definition.id}
+                  value={databaseConfig}
+                  onChange={setDatabaseConfig}
+                />
+              ) : null}
 
-              <Button type="primary" icon={<CloudDownloadOutlined />} disabled={!selectedVersion} onClick={() => void handleCreateTask()}>
+              <Button
+                type="primary"
+                icon={<CloudDownloadOutlined />}
+                disabled={!selectedVersion}
+                onClick={() => void handleCreateTask()}
+              >
                 创建安装任务
               </Button>
             </Space>

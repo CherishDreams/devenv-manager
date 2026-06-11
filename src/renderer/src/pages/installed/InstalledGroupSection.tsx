@@ -24,11 +24,7 @@ export function InstalledGroupSection({
             {group.description ? <Typography.Text type="secondary">{group.description}</Typography.Text> : null}
           </div>
         </Space>
-        <Tag color="default">
-          {group.records.length}
-          {" "}
-          个版本
-        </Tag>
+        <Tag color="default">{group.records.length} 个版本</Tag>
       </div>
       <Table
         rowKey="id"

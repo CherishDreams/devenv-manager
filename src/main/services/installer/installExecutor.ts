@@ -73,7 +73,11 @@ export async function runInstaller(
 
   if (input.environment === "ruby") {
     await ensureEmptyInstallTarget(installPath);
-    await runProcess(installerPath, ["/verysilent", "/suppressmsgboxes", "/norestart", `/dir=${installPath}`, "/tasks="], signal);
+    await runProcess(
+      installerPath,
+      ["/verysilent", "/suppressmsgboxes", "/norestart", `/dir=${installPath}`, "/tasks="],
+      signal,
+    );
     return;
   }
 
@@ -155,7 +159,10 @@ export async function prepareInstalledEnvironment(
     if (await pathExists(latestPath)) {
       await moveIfExists(join(latestPath, "bin"), join(installPath, "cmdline-tools", "bin"));
       await moveIfExists(join(latestPath, "lib"), join(installPath, "cmdline-tools", "lib"));
-      await moveIfExists(join(latestPath, "source.properties"), join(installPath, "cmdline-tools", "source.properties"));
+      await moveIfExists(
+        join(latestPath, "source.properties"),
+        join(installPath, "cmdline-tools", "source.properties"),
+      );
       await rm(latestPath, { recursive: true, force: true });
       onLog("已整理 Android Command Line Tools 目录。");
     }

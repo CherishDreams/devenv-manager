@@ -29,24 +29,24 @@ export async function listMySqlVersions(config: AppConfig): Promise<AvailableVer
       }
     }),
   );
-  const versions = unique(
-    [
-      ...pages.flatMap((page) =>
-        Array.from(page.matchAll(/mysql-(\d+\.\d+\.\d+)(?:-winx64)?\.zip/g), (match) => match[1]),
-      ),
-      ...staticVersions.map((version) => version.version),
-    ],
-  ).sort(compareVersionsDesc);
-
-  return versions.slice(0, maxVersionOptions).map((version, index) =>
-    createVersion(
-      "mysql",
-      "community",
-      version,
-      `MySQL ${version}${getMySqlTrack(version) === "8.4" ? " LTS" : ""}`,
-      getMySqlTrack(version) === "8.4" ? "lts" : index === 0 ? "current" : "stable",
-      "archive",
-      sourceNotes,
+  const versions = unique([
+    ...pages.flatMap((page) =>
+      Array.from(page.matchAll(/mysql-(\d+\.\d+\.\d+)(?:-winx64)?\.zip/g), (match) => match[1]),
     ),
-  );
+    ...staticVersions.map((version) => version.version),
+  ]).sort(compareVersionsDesc);
+
+  return versions
+    .slice(0, maxVersionOptions)
+    .map((version, index) =>
+      createVersion(
+        "mysql",
+        "community",
+        version,
+        `MySQL ${version}${getMySqlTrack(version) === "8.4" ? " LTS" : ""}`,
+        getMySqlTrack(version) === "8.4" ? "lts" : index === 0 ? "current" : "stable",
+        "archive",
+        sourceNotes,
+      ),
+    );
 }

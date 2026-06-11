@@ -21,8 +21,10 @@ export async function resolveNodeResource(
   }
 
   const configuredMirror = config.mirrors.node.trim();
-  const distBaseUrl
-    = configuredMirror && configuredMirror !== "official" ? configuredMirror.replace(/\/+$/, "") : "https://nodejs.org/dist";
+  const distBaseUrl =
+    configuredMirror && configuredMirror !== "official"
+      ? configuredMirror.replace(/\/+$/, "")
+      : "https://nodejs.org/dist";
   const releases = await fetchJson<NodeRelease[]>(`${distBaseUrl}/index.json`, config, signal);
   const requestedVersion = input.version.replace(/^v/, "");
   const release = releases.find((item) => {

@@ -25,8 +25,7 @@ export function runProcess(
     };
 
     settle = (fn: () => void): void => {
-      if (settled)
-        return;
+      if (settled) return;
       settled = true;
       signal.removeEventListener("abort", abort);
       fn();

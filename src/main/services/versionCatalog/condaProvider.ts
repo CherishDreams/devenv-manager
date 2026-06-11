@@ -17,10 +17,7 @@ export async function listCondaVersions(query: VersionCatalogQuery, config: AppC
   if (query.vendor === "anaconda") {
     const listing = await fetchText(`${baseUrl}/archive/`, config);
     const versions = unique(
-      Array.from(
-        listing.matchAll(/Anaconda3-(\d{4}\.\d+(?:-\d+)?)-Windows-x86_64\.exe/g),
-        (match) => match[1],
-      ),
+      Array.from(listing.matchAll(/Anaconda3-(\d{4}\.\d+(?:-\d+)?)-Windows-x86_64\.exe/g), (match) => match[1]),
     ).sort(compareVersionsDesc);
 
     return (versions.length > 0 ? versions.slice(0, maxVersionOptions) : ["latest"]).map((version) =>

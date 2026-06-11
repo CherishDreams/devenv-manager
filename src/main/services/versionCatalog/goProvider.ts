@@ -45,7 +45,7 @@ export async function listGoVersions(config: AppConfig): Promise<AvailableVersio
   );
   const sourceNotes = `来自 ${source.name}`;
 
-  return minorVersions.slice(0, maxVersionOptions).map((version) =>
-    createVersion("go", "golang", version, `Go ${version}`, "stable", "archive", sourceNotes),
-  );
+  return minorVersions
+    .slice(0, maxVersionOptions)
+    .map((version) => createVersion("go", "golang", version, `Go ${version}`, "stable", "archive", sourceNotes));
 }

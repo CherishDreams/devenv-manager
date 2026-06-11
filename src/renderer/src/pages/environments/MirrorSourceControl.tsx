@@ -57,7 +57,7 @@ export function MirrorSourceControl({
     ? officialMirrorValue
     : selectedPresetId === customMirrorPresetId
       ? customMirrorUrl.trim()
-      : selectedPreset?.value ?? officialMirrorValue;
+      : (selectedPreset?.value ?? officialMirrorValue);
   const normalizedSavedValue = normalizeMirrorValue(savedMirrorValue);
   const normalizedPendingValue = normalizeMirrorValue(pendingMirrorValue);
   const isDirty = normalizedSavedValue !== normalizedPendingValue;
@@ -72,7 +72,9 @@ export function MirrorSourceControl({
       return;
     }
 
-    const firstMirrorPreset = presets.find((preset) => ![officialMirrorValue, customMirrorPresetId].includes(preset.id));
+    const firstMirrorPreset = presets.find(
+      (preset) => ![officialMirrorValue, customMirrorPresetId].includes(preset.id),
+    );
     setSelectedPresetId(firstMirrorPreset?.id ?? customMirrorPresetId);
   };
 
@@ -115,31 +117,27 @@ export function MirrorSourceControl({
           </Button>
         </div>
 
-        {isEnabled
-          ? (
-              <>
-                <Select
-                  value={selectedPresetId}
-                  options={presetOptions}
-                  onChange={setSelectedPresetId}
-                  className="full-width"
-                  optionFilterProp="label"
-                  showSearch
-                />
-                {showCustomInput
-                  ? (
-                      <Input
-                        value={customMirrorUrl}
-                        onChange={(event) => setCustomMirrorUrl(event.target.value)}
-                        placeholder="https://mirror.example.com/path"
-                      />
-                    )
-                  : null}
-              </>
-            )
-          : (
-              <Alert type="info" showIcon message="当前环境将使用默认官方源获取版本和下载安装包。" />
-            )}
+        {isEnabled ? (
+          <>
+            <Select
+              value={selectedPresetId}
+              options={presetOptions}
+              onChange={setSelectedPresetId}
+              className="full-width"
+              optionFilterProp="label"
+              showSearch
+            />
+            {showCustomInput ? (
+              <Input
+                value={customMirrorUrl}
+                onChange={(event) => setCustomMirrorUrl(event.target.value)}
+                placeholder="https://mirror.example.com/path"
+              />
+            ) : null}
+          </>
+        ) : (
+          <Alert type="info" showIcon message="当前环境将使用默认官方源获取版本和下载安装包。" />
+        )}
       </Space>
     </div>
   );

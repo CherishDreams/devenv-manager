@@ -37,17 +37,23 @@ export async function listDotnetVersions(config: AppConfig): Promise<AvailableVe
 
   return channelReleases
     .flatMap(({ channel, data }) =>
-      data.releases.slice(0, 4).map((release) =>
-        createVersion(
-          "dotnet",
-          "microsoft",
-          release.sdk.version,
-          `.NET SDK ${release.sdk.version}${channel["release-type"].toLowerCase() === "lts" ? " LTS" : ""}`,
-          channel["release-type"].toLowerCase() === "lts" ? "lts" : channel["support-phase"] === "active" ? "stable" : "current",
-          "archive",
-          `${channel["channel-version"]} ${channel["support-phase"]}`,
+      data.releases
+        .slice(0, 4)
+        .map((release) =>
+          createVersion(
+            "dotnet",
+            "microsoft",
+            release.sdk.version,
+            `.NET SDK ${release.sdk.version}${channel["release-type"].toLowerCase() === "lts" ? " LTS" : ""}`,
+            channel["release-type"].toLowerCase() === "lts"
+              ? "lts"
+              : channel["support-phase"] === "active"
+                ? "stable"
+                : "current",
+            "archive",
+            `${channel["channel-version"]} ${channel["support-phase"]}`,
+          ),
         ),
-      ),
     )
     .slice(0, maxVersionOptions);
 }

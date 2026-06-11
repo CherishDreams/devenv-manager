@@ -7,7 +7,10 @@ export async function listRedisVersions(config: AppConfig): Promise<AvailableVer
     return getStaticVersionsWithMirrorNote({ environment: "redis", vendor: "redis-windows" }, config.mirrors.redis);
   }
 
-  const releases = await fetchJson<GitHubRelease[]>("https://api.github.com/repos/tporadowski/redis/releases?per_page=40", config);
+  const releases = await fetchJson<GitHubRelease[]>(
+    "https://api.github.com/repos/tporadowski/redis/releases?per_page=40",
+    config,
+  );
 
   return releases
     .filter((release) => !release.draft && !release.prerelease)
@@ -15,6 +18,13 @@ export async function listRedisVersions(config: AppConfig): Promise<AvailableVer
     .slice(0, maxVersionOptions)
     .map((release, index) => {
       const version = release.tag_name.replace(/^v/, "");
-      return createVersion("redis", "redis-windows", version, `Redis Windows ${version}`, index === 0 ? "current" : "stable", "archive");
+      return createVersion(
+        "redis",
+        "redis-windows",
+        version,
+        `Redis Windows ${version}`,
+        index === 0 ? "current" : "stable",
+        "archive",
+      );
     });
 }

@@ -8,7 +8,10 @@ export interface InstalledGroup {
   records: InstallRecord[];
 }
 
-export function groupInstallations(definitions: EnvironmentDefinition[], installations: InstallRecord[]): InstalledGroup[] {
+export function groupInstallations(
+  definitions: EnvironmentDefinition[],
+  installations: InstallRecord[],
+): InstalledGroup[] {
   const recordsByKind = installations.reduce<Map<EnvironmentKind, InstallRecord[]>>((grouped, record) => {
     const nextRecords = grouped.get(record.environment) ?? [];
     nextRecords.push(record);

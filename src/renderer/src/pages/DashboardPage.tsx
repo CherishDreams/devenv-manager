@@ -97,10 +97,13 @@ export default function DashboardPage(): React.ReactElement {
   const loadTasks = useTaskStore((state) => state.load);
 
   const definitionsById = useMemo(() => {
-    return (summary?.definitions ?? []).reduce<Map<EnvironmentKind, EnvironmentDefinition>>((definitions, definition) => {
-      definitions.set(definition.id, definition);
-      return definitions;
-    }, new Map());
+    return (summary?.definitions ?? []).reduce<Map<EnvironmentKind, EnvironmentDefinition>>(
+      (definitions, definition) => {
+        definitions.set(definition.id, definition);
+        return definitions;
+      },
+      new Map(),
+    );
   }, [summary?.definitions]);
 
   const activeRecords = useMemo(() => {
@@ -153,7 +156,14 @@ export default function DashboardPage(): React.ReactElement {
         note: config?.globalInstallDir ?? "未加载",
       },
     ];
-  }, [activeRecords.length, config?.globalInstallDir, failedTaskCount, runningTaskCount, summary?.definitions.length, summary?.installations]);
+  }, [
+    activeRecords.length,
+    config?.globalInstallDir,
+    failedTaskCount,
+    runningTaskCount,
+    summary?.definitions.length,
+    summary?.installations,
+  ]);
 
   const refresh = async (): Promise<void> => {
     await Promise.all([loadConfig(), loadSystem(), loadEnvironment(), loadTasks()]);
@@ -161,16 +171,14 @@ export default function DashboardPage(): React.ReactElement {
 
   return (
     <div className="dashboard-page">
-      {!status?.isAdministrator
-        ? (
-            <Alert
-              type="warning"
-              showIcon
-              message="当前不是管理员权限"
-              description="系统环境变量写入需要管理员权限，打包后的 Windows 安装版会请求管理员运行。"
-            />
-          )
-        : null}
+      {!status?.isAdministrator ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="当前不是管理员权限"
+          description="系统环境变量写入需要管理员权限，打包后的 Windows 安装版会请求管理员运行。"
+        />
+      ) : null}
 
       <div className="dashboard-toolbar">
         <div>
@@ -195,24 +203,22 @@ export default function DashboardPage(): React.ReactElement {
               <Typography.Title level={4}>当前激活环境</Typography.Title>
               <Typography.Text type="secondary">一键切换后的全局版本</Typography.Text>
             </div>
-            <Tag color="green">
-              {activeRecords.length}
-              {" "}
-              个
-            </Tag>
+            <Tag color="green">{activeRecords.length} 个</Tag>
           </div>
           <div className="dashboard-record-list">
-            {activeRecords.length > 0
-              ? (
-                  activeRecords
-                    .slice(0, 6)
-                    .map((record) => (
-                      <ActiveEnvironmentRow key={record.id} record={record} definition={definitionsById.get(record.environment)} />
-                    ))
-                )
-              : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无激活环境" />
-                )}
+            {activeRecords.length > 0 ? (
+              activeRecords
+                .slice(0, 6)
+                .map((record) => (
+                  <ActiveEnvironmentRow
+                    key={record.id}
+                    record={record}
+                    definition={definitionsById.get(record.environment)}
+                  />
+                ))
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无激活环境" />
+            )}
           </div>
         </section>
 
@@ -228,13 +234,11 @@ export default function DashboardPage(): React.ReactElement {
             </Tag>
           </div>
           <div className="dashboard-task-list">
-            {recentTasks.length > 0
-              ? (
-                  recentTasks.map((task) => <TaskRow key={task.id} task={task} />)
-                )
-              : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务" />
-                )}
+            {recentTasks.length > 0 ? (
+              recentTasks.map((task) => <TaskRow key={task.id} task={task} />)
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务" />
+            )}
           </div>
         </section>
       </div>

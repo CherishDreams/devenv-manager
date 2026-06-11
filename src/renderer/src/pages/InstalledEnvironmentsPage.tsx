@@ -87,29 +87,21 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
             扫描系统环境
           </Button>
           <Tag icon={<AppstoreOutlined />} color="blue">
-            {installations.length}
-            {" "}
-            个版本
+            {installations.length} 个版本
           </Tag>
-          <Tag color="green">
-            {activeCount}
-            {" "}
-            个激活
-          </Tag>
+          <Tag color="green">{activeCount} 个激活</Tag>
         </Space>
       </div>
 
       {error ? <Alert type="error" message={error} showIcon /> : null}
 
-      {groupedInstallations.length > 0
-        ? (
-            groupedInstallations.map((group) => (
-              <InstalledGroupSection key={group.key} group={group} loading={loading} columns={columns} />
-            ))
-          )
-        : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无本程序安装的环境" />
-          )}
+      {groupedInstallations.length > 0 ? (
+        groupedInstallations.map((group) => (
+          <InstalledGroupSection key={group.key} group={group} loading={loading} columns={columns} />
+        ))
+      ) : (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无本程序安装的环境" />
+      )}
 
       <DiscoveryModal
         open={discoveryOpen}

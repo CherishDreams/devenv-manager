@@ -9,8 +9,10 @@ export function resolveMongoDbResource(input: InstallTaskInput, config: AppConfi
 
   const fileName = `mongodb-windows-x86_64-${input.version}.zip`;
   const configuredMirror = config.mirrors.mongodb.trim();
-  const baseUrl
-    = configuredMirror && configuredMirror !== "official" ? configuredMirror.replace(/\/+$/, "") : "https://fastdl.mongodb.org/windows";
+  const baseUrl =
+    configuredMirror && configuredMirror !== "official"
+      ? configuredMirror.replace(/\/+$/, "")
+      : "https://fastdl.mongodb.org/windows";
 
   return {
     url: `${baseUrl}/${fileName}`,

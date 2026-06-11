@@ -42,18 +42,14 @@ export function listJavaVersions(query: VersionCatalogQuery, config: AppConfig):
 }
 
 function classifyTemurinChannel(major: number, mostRecentFeature: number, ltsReleases: Set<number>): VersionChannel {
-  if (major === mostRecentFeature)
-    return "current";
-  if (ltsReleases.has(major))
-    return "lts";
+  if (major === mostRecentFeature) return "current";
+  if (ltsReleases.has(major)) return "lts";
   return "stable";
 }
 
 function classifyStandardChannel(major: number, index: number, ltsMajors: number[]): VersionChannel {
-  if (ltsMajors.includes(major))
-    return "lts";
-  if (index === 0)
-    return "current";
+  if (ltsMajors.includes(major)) return "lts";
+  if (index === 0) return "current";
   return "stable";
 }
 
@@ -65,17 +61,19 @@ async function listTemurinVersions(config: AppConfig): Promise<AvailableVersion[
   const ltsReleases = new Set(releases.available_lts_releases);
   const majors = unique(releases.available_releases.slice().sort((left, right) => right - left));
 
-  return majors.slice(0, maxVersionOptions).map((major) =>
-    createVersion(
-      "java",
-      "temurin",
-      String(major),
-      `JDK ${major}${ltsReleases.has(major) ? " LTS" : ""}`,
-      classifyTemurinChannel(major, releases.most_recent_feature_release, ltsReleases),
-      "archive",
-      "来自 Adoptium 在线版本接口",
-    ),
-  );
+  return majors
+    .slice(0, maxVersionOptions)
+    .map((major) =>
+      createVersion(
+        "java",
+        "temurin",
+        String(major),
+        `JDK ${major}${ltsReleases.has(major) ? " LTS" : ""}`,
+        classifyTemurinChannel(major, releases.most_recent_feature_release, ltsReleases),
+        "archive",
+        "来自 Adoptium 在线版本接口",
+      ),
+    );
 }
 
 async function listZuluVersions(config: AppConfig): Promise<AvailableVersion[]> {
@@ -153,15 +151,17 @@ async function listOracleVersions(config: AppConfig): Promise<AvailableVersion[]
     .filter((major) => !Number.isNaN(major))
     .sort((left, right) => right - left);
 
-  return majors.slice(0, maxVersionOptions).map((major, index) =>
-    createVersion(
-      "java",
-      "oracle",
-      String(major),
-      `Oracle JDK ${major}`,
-      classifyStandardChannel(major, index, [21, 17, 11, 8]),
-      "archive",
-      "来自 Oracle Java 下载页",
-    ),
-  );
+  return majors
+    .slice(0, maxVersionOptions)
+    .map((major, index) =>
+      createVersion(
+        "java",
+        "oracle",
+        String(major),
+        `Oracle JDK ${major}`,
+        classifyStandardChannel(major, index, [21, 17, 11, 8]),
+        "archive",
+        "来自 Oracle Java 下载页",
+      ),
+    );
 }

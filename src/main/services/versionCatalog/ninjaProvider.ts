@@ -7,7 +7,10 @@ export async function listNinjaVersions(config: AppConfig): Promise<AvailableVer
     return getStaticVersionsWithMirrorNote({ environment: "ninja", vendor: "ninja-build" }, config.mirrors.ninja);
   }
 
-  const releases = await fetchJson<GitHubRelease[]>("https://api.github.com/repos/ninja-build/ninja/releases?per_page=40", config);
+  const releases = await fetchJson<GitHubRelease[]>(
+    "https://api.github.com/repos/ninja-build/ninja/releases?per_page=40",
+    config,
+  );
 
   return releases
     .filter((release) => !release.draft && !release.prerelease)

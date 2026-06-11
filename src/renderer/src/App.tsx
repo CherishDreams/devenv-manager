@@ -22,7 +22,9 @@ type PageKey = "dashboard" | "installed" | "environments" | "logs" | "settings";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const InstalledEnvironmentsPage = lazy(() => import("./pages/InstalledEnvironmentsPage"));
-const EnvironmentsPage = lazy(() => import("./pages/EnvironmentsPage").then((mod) => ({ default: mod.EnvironmentInstallPage })));
+const EnvironmentsPage = lazy(() =>
+  import("./pages/EnvironmentsPage").then((mod) => ({ default: mod.EnvironmentInstallPage })),
+);
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const LogsPage = lazy(() => import("./pages/LogsPage"));
 
@@ -165,7 +167,9 @@ function ClassicSidebar({
       <nav className="classic-sidebar-nav">
         {navItems.map((item) => (
           <button
-            className={pageKey === item.key ? "classic-sidebar-item classic-sidebar-item-active" : "classic-sidebar-item"}
+            className={
+              pageKey === item.key ? "classic-sidebar-item classic-sidebar-item-active" : "classic-sidebar-item"
+            }
             type="button"
             key={item.key}
             aria-current={pageKey === item.key ? "page" : undefined}
@@ -178,7 +182,9 @@ function ClassicSidebar({
       </nav>
       <div className="classic-sidebar-footer">
         <button
-          className={pageKey === "settings" ? "classic-sidebar-item classic-sidebar-item-active" : "classic-sidebar-item"}
+          className={
+            pageKey === "settings" ? "classic-sidebar-item classic-sidebar-item-active" : "classic-sidebar-item"
+          }
           type="button"
           aria-current={pageKey === "settings" ? "page" : undefined}
           onClick={() => onNavigate("settings")}
@@ -256,32 +262,28 @@ export default function App(): React.ReactElement {
     <ConfigProvider theme={themeConfig}>
       <AntdApp>
         <div className={`app-shell app-shell-${navigationLayout}`}>
-          {navigationLayout === "sidebar"
-            ? (
-                <ClassicSidebar pageKey={pageKey} onNavigate={setPageKey} />
-              )
-            : (
-                <PageRail pageKey={pageKey} onNavigate={setPageKey} onOpenSettings={() => setPageKey("settings")} />
-              )}
+          {navigationLayout === "sidebar" ? (
+            <ClassicSidebar pageKey={pageKey} onNavigate={setPageKey} />
+          ) : (
+            <PageRail pageKey={pageKey} onNavigate={setPageKey} onOpenSettings={() => setPageKey("settings")} />
+          )}
           <main className={pageKey === "settings" ? "shell-main shell-main-settings" : "shell-main"}>
-            {pageKey !== "settings"
-              ? (
-                  <header className="app-header">
-                    <div className="app-header-title">
-                      <Typography.Title level={3}>{pageTitles[pageKey]}</Typography.Title>
-                      <Typography.Text>DevEnv Manager</Typography.Text>
-                    </div>
-                    <HeaderStatus />
-                  </header>
-                )
-              : null}
+            {pageKey !== "settings" ? (
+              <header className="app-header">
+                <div className="app-header-title">
+                  <Typography.Title level={3}>{pageTitles[pageKey]}</Typography.Title>
+                  <Typography.Text>DevEnv Manager</Typography.Text>
+                </div>
+                <HeaderStatus />
+              </header>
+            ) : null}
             <section className="app-content">
               <Suspense
-                fallback={(
+                fallback={
                   <div className="page-loading">
                     <Spin />
                   </div>
-                )}
+                }
               >
                 {renderPage(pageKey)}
               </Suspense>

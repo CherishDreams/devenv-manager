@@ -5,10 +5,7 @@ import { compareVersionsDesc, createVersion, fetchText, getMirrorBaseUrl, maxVer
 export async function listMavenVersions(config: AppConfig): Promise<AvailableVersion[]> {
   const configuredMirror = config.mirrors.maven.trim();
   const repositoryBaseUrl = getMirrorBaseUrl(configuredMirror, "https://repo.maven.apache.org/maven2");
-  const metadata = await fetchText(
-    `${repositoryBaseUrl}/org/apache/maven/apache-maven/maven-metadata.xml`,
-    config,
-  );
+  const metadata = await fetchText(`${repositoryBaseUrl}/org/apache/maven/apache-maven/maven-metadata.xml`, config);
   const versions = Array.from(metadata.matchAll(/<version>(3\.\d+\.\d+)<\/version>/g), (match) => match[1])
     .sort(compareVersionsDesc)
     .slice(0, maxVersionOptions);

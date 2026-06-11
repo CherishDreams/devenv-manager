@@ -135,7 +135,10 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
         tasks.map((task) => ({
           ...task,
           input: task.input
-            ? { ...task.input, databaseConfig: task.input.databaseConfig ? { ...task.input.databaseConfig } : undefined }
+            ? {
+                ...task.input,
+                databaseConfig: task.input.databaseConfig ? { ...task.input.databaseConfig } : undefined,
+              }
             : undefined,
           logs: [...task.logs],
         })),
@@ -310,8 +313,8 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
     },
     permissions: {
       check: async (input) => {
-        const installInput
-          = input.type === "install"
+        const installInput =
+          input.type === "install"
             ? input.input
             : input.type === "retry"
               ? tasks.find((task) => task.id === input.id)?.input
@@ -319,21 +322,30 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
         const needsServiceElevation = Boolean(
           installInput?.databaseConfig?.enabled && installInput.databaseConfig.installAsService,
         );
-        const environmentWrite
-          = input.type === "set-active"
-            || input.type === "uninstall"
-            || Boolean(installInput?.configureSystemEnv);
-        const required = !mockSystemStatus.isAdministrator && (needsServiceElevation || (environmentWrite && config.environmentManagement.mode === "direct"));
+        const environmentWrite =
+          input.type === "set-active" || input.type === "uninstall" || Boolean(installInput?.configureSystemEnv);
+        const required =
+          !mockSystemStatus.isAdministrator &&
+          (needsServiceElevation || (environmentWrite && config.environmentManagement.mode === "direct"));
 
         return {
           required,
           authorized: false,
-          reason: needsServiceElevation ? "注册数据库 Windows 系统服务需要管理员权限。" : "当前操作需要更新系统环境变量。",
+          reason: needsServiceElevation
+            ? "注册数据库 Windows 系统服务需要管理员权限。"
+            : "当前操作需要更新系统环境变量。",
           canSwitchToSymlink:
-            required && !needsServiceElevation && config.environmentManagement.mode === "direct" && input.type !== "uninstall",
+            required &&
+            !needsServiceElevation &&
+            config.environmentManagement.mode === "direct" &&
+            input.type !== "uninstall",
           currentMode: config.environmentManagement.mode,
           authorizationMode:
-            required && (input.type === "install" || input.type === "retry") ? "restart-app" : required ? "elevated-helper" : "none",
+            required && (input.type === "install" || input.type === "retry")
+              ? "restart-app"
+              : required
+                ? "elevated-helper"
+                : "none",
         };
       },
     },
@@ -424,11 +436,13 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
         return tasks.find((item) => item.id === id);
       },
       retry: async (id: string, _authorized = false) => {
-        const task = tasks.find((item) => item.id === id);
+        const taskIndex = tasks.findIndex((item) => item.id === id);
 
-        if (!task) {
+        if (taskIndex === -1) {
           throw new Error("未找到要重试的任务。");
         }
+
+        const task = tasks[taskIndex];
 
         if (task.status !== "failed") {
           throw new Error("只有失败任务可以重试。");
@@ -442,13 +456,25 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
           throw new Error("该任务缺少可重试的安装参数，请重新创建安装任务。");
         }
 
-        return createMockInstallTask(input, [
-          {
-            at: new Date().toISOString(),
-            level: "info",
-            message: `由失败任务重试创建：${task.title}`,
-          },
-        ]);
+        const now = new Date().toISOString();
+        tasks[taskIndex] = {
+          ...task,
+          status: "queued" as const,
+          progress: 0,
+          download: undefined,
+          updatedAt: now,
+          logs: [
+            ...task.logs,
+            {
+              at: now,
+              level: "info" as const,
+              message: "任务已重新加入队列，等待执行。",
+            },
+          ],
+        };
+        emitTasks();
+        scheduleTask(id);
+        return tasks[taskIndex];
       },
       remove: async (id: string) => {
         const task = tasks.find((item) => item.id === id);

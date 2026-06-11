@@ -4,10 +4,7 @@ import { app, BrowserWindow, Menu } from "electron";
 import { getErrorMessage, parseJsonAs } from "../shared/errorUtils";
 import { registerIpc } from "./ipc/registerIpc";
 import { ConfigService } from "./services/configService";
-import {
-  shutdownElevatedBroker,
-  startElevatedBrokerServer,
-} from "./services/elevationService";
+import { shutdownElevatedBroker, startElevatedBrokerServer } from "./services/elevationService";
 import { EnvironmentDiscoveryService } from "./services/environmentDiscoveryService";
 import { EnvironmentRecordService } from "./services/environmentRecordService";
 import { InstallerService } from "./services/installerService";
@@ -53,7 +50,8 @@ async function runElevatedBroker(options: { pipePath: string; parentPid?: number
   await startElevatedBrokerServer(options.pipePath, (operation) =>
     operation.type === "set-active"
       ? environmentRecordService.setActive(operation.environment, operation.id)
-      : environmentRecordService.uninstallManaged(operation.id));
+      : environmentRecordService.uninstallManaged(operation.id),
+  );
 }
 
 function getAppIconPath(): string {
@@ -156,8 +154,8 @@ function createWindow(): void {
   if (isDev) {
     mainWindow.webContents.on("before-input-event", (_, input) => {
       const key = input.key.toLowerCase();
-      const shouldToggleDevTools
-        = input.type === "keyDown" && (key === "f12" || (input.control && input.shift && key === "i"));
+      const shouldToggleDevTools =
+        input.type === "keyDown" && (key === "f12" || (input.control && input.shift && key === "i"));
 
       if (shouldToggleDevTools) {
         mainWindow?.webContents.toggleDevTools();

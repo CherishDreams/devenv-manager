@@ -32,10 +32,10 @@ async function checkPrivilegeRequirement(input: PrivilegeCheckInput): Promise<Pr
   const needsServiceElevation = Boolean(
     installInput?.databaseConfig?.enabled && installInput.databaseConfig.installAsService,
   );
-  const canSwitchToSymlink
-    = config.environmentManagement.mode === "direct"
-      && !needsServiceElevation
-      && (input.type === "set-active" || input.type === "install" || input.type === "retry");
+  const canSwitchToSymlink =
+    config.environmentManagement.mode === "direct" &&
+    !needsServiceElevation &&
+    (input.type === "set-active" || input.type === "install" || input.type === "retry");
 
   return {
     required: true,
@@ -52,7 +52,10 @@ function getAuthorizationLabel(requirement: PrivilegeRequirement): string {
 }
 
 export function usePrivilegeGuard(): {
-  runWithPrivilege: <T>(input: PrivilegeCheckInput, action: (authorized: boolean) => Promise<T>) => Promise<T | undefined>;
+  runWithPrivilege: <T>(
+    input: PrivilegeCheckInput,
+    action: (authorized: boolean) => Promise<T>,
+  ) => Promise<T | undefined>;
 } {
   const { message, modal } = AntdApp.useApp();
   const updateConfig = useConfigStore((state) => state.update);
@@ -85,13 +88,11 @@ export function usePrivilegeGuard(): {
                   ? "授权后应用会以管理员身份重启，并自动继续创建任务。"
                   : "授权后会启动或复用管理员辅助进程，当前应用窗口不会重启，本次应用会话内后续同类操作不再重复授权。"}
               </Typography.Text>
-              {requirement.canSwitchToSymlink
-                ? (
-                    <Button icon={<LinkOutlined />} onClick={() => finish("symlink")}>
-                      切换为软件软链接
-                    </Button>
-                  )
-                : null}
+              {requirement.canSwitchToSymlink ? (
+                <Button icon={<LinkOutlined />} onClick={() => finish("symlink")}>
+                  切换为软件软链接
+                </Button>
+              ) : null}
             </Space>
           ),
           okText: getAuthorizationLabel(requirement),

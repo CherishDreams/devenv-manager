@@ -72,7 +72,9 @@ export function DatabaseInstallSettings({
   onChange,
 }: DatabaseInstallSettingsProps): React.ReactElement {
   const spec = databaseConfigSpecs[environment];
-  const serviceHelp = value.installAsService ? "需要管理员权限；服务名建议保持唯一。" : "不注册服务时仅写入启动配置文件。";
+  const serviceHelp = value.installAsService
+    ? "需要管理员权限；服务名建议保持唯一。"
+    : "不注册服务时仅写入启动配置文件。";
   const serviceName = value.serviceName || createDefaultDatabaseInstallConfig(environment).serviceName;
 
   const charsetOptions = useMemo(
@@ -113,84 +115,83 @@ export function DatabaseInstallSettings({
         />
       </div>
 
-      {value.enabled
-        ? (
-            <Space direction="vertical" size={12} className="full-width">
-              <Alert type="info" showIcon message={`安装器会写入 ${spec.configFileLabel}，端口和绑定地址会在启动时生效。`} />
+      {value.enabled ? (
+        <Space direction="vertical" size={12} className="full-width">
+          <Alert
+            type="info"
+            showIcon
+            message={`安装器会写入 ${spec.configFileLabel}，端口和绑定地址会在启动时生效。`}
+          />
 
-              <div className="database-config-grid">
-                <label className="database-config-field">
-                  <Typography.Text strong>端口</Typography.Text>
-                  <InputNumber
-                    min={1}
-                    max={65535}
-                    value={value.port}
-                    className="full-width"
-                    onChange={(nextValue) => update({ port: nextValue ?? value.port })}
-                  />
-                </label>
+          <div className="database-config-grid">
+            <label className="database-config-field">
+              <Typography.Text strong>端口</Typography.Text>
+              <InputNumber
+                min={1}
+                max={65535}
+                value={value.port}
+                className="full-width"
+                onChange={(nextValue) => update({ port: nextValue ?? value.port })}
+              />
+            </label>
 
-                <label className="database-config-field">
-                  <Typography.Text strong>绑定地址</Typography.Text>
-                  <Input value={value.bindAddress} onChange={(event) => update({ bindAddress: event.target.value })} />
-                </label>
+            <label className="database-config-field">
+              <Typography.Text strong>绑定地址</Typography.Text>
+              <Input value={value.bindAddress} onChange={(event) => update({ bindAddress: event.target.value })} />
+            </label>
 
-                {spec.showCharset
-                  ? (
-                      <label className="database-config-field">
-                        <Typography.Text strong>编码</Typography.Text>
-                        <Select
-                          value={value.charset}
-                          options={charsetOptions}
-                          showSearch
-                          onChange={(nextValue) => update({ charset: nextValue })}
-                        />
-                      </label>
-                    )
-                  : null}
+            {spec.showCharset ? (
+              <label className="database-config-field">
+                <Typography.Text strong>编码</Typography.Text>
+                <Select
+                  value={value.charset}
+                  options={charsetOptions}
+                  showSearch
+                  onChange={(nextValue) => update({ charset: nextValue })}
+                />
+              </label>
+            ) : null}
 
-                {spec.showCollation
-                  ? (
-                      <label className="database-config-field">
-                        <Typography.Text strong>{environment === "postgresql" ? "Locale" : "排序规则"}</Typography.Text>
-                        <Input
-                          value={value.collation}
-                          placeholder={spec.collationPlaceholder}
-                          onChange={(event) => update({ collation: event.target.value })}
-                        />
-                      </label>
-                    )
-                  : null}
-              </div>
+            {spec.showCollation ? (
+              <label className="database-config-field">
+                <Typography.Text strong>{environment === "postgresql" ? "Locale" : "排序规则"}</Typography.Text>
+                <Input
+                  value={value.collation}
+                  placeholder={spec.collationPlaceholder}
+                  onChange={(event) => update({ collation: event.target.value })}
+                />
+              </label>
+            ) : null}
+          </div>
 
-              <div className="database-service-row">
-                <Checkbox checked={value.installAsService} onChange={(event) => toggleService(event.target.checked)}>
-                  注册为 Windows 系统服务
+          <div className="database-service-row">
+            <Checkbox checked={value.installAsService} onChange={(event) => toggleService(event.target.checked)}>
+              注册为 Windows 系统服务
+            </Checkbox>
+            <Typography.Text type="secondary">{serviceHelp}</Typography.Text>
+          </div>
+
+          {value.installAsService ? (
+            <div className="database-config-grid database-config-grid-service">
+              <label className="database-config-field">
+                <Typography.Text strong>服务名</Typography.Text>
+                <Input value={serviceName} onChange={(event) => update({ serviceName: event.target.value })} />
+              </label>
+
+              <div className="database-config-field database-config-checkbox-field">
+                <Checkbox
+                  checked={value.startService}
+                  onChange={(event) => update({ startService: event.target.checked })}
+                >
+                  安装完成后启动服务
                 </Checkbox>
-                <Typography.Text type="secondary">{serviceHelp}</Typography.Text>
               </div>
-
-              {value.installAsService
-                ? (
-                    <div className="database-config-grid database-config-grid-service">
-                      <label className="database-config-field">
-                        <Typography.Text strong>服务名</Typography.Text>
-                        <Input value={serviceName} onChange={(event) => update({ serviceName: event.target.value })} />
-                      </label>
-
-                      <div className="database-config-field database-config-checkbox-field">
-                        <Checkbox checked={value.startService} onChange={(event) => update({ startService: event.target.checked })}>
-                          安装完成后启动服务
-                        </Checkbox>
-                      </div>
-                    </div>
-                  )
-                : null}
-            </Space>
-          )
-        : (
-            <Alert type="warning" showIcon message="将只解压数据库运行时，不生成端口、编码或服务配置。" />
-          )}
+            </div>
+          ) : null}
+        </Space>
+      ) : (
+        <Alert type="warning" showIcon message="将只解压数据库运行时，不生成端口、编码或服务配置。" />
+      )}
     </div>
   );
 }

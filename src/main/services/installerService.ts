@@ -89,7 +89,9 @@ export class InstallerService {
 
     const verification = getVerificationCommand(input.environment, installPath);
     const verificationResult = await runProcess(verification.command, verification.args, signal);
-    const verificationOutput = [verificationResult.stdout.trim(), verificationResult.stderr.trim()].filter(Boolean).join("\n");
+    const verificationOutput = [verificationResult.stdout.trim(), verificationResult.stderr.trim()]
+      .filter(Boolean)
+      .join("\n");
     events.progress(96);
     events.log(`验证完成：${verificationOutput.split("\n")[0] ?? verification.command}`);
 

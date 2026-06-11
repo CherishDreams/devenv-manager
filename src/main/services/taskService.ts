@@ -147,14 +147,22 @@ export class TaskService extends EventEmitter {
       throw new Error("该任务缺少可重试的安装参数，请重新创建安装任务。");
     }
 
-    const legacyWarning = task.input
-      ? undefined
-      : createLog("原任务缺少完整安装参数，已按标题恢复为全局安装任务。", "warn");
+    const now = new Date().toISOString();
+    const retryLogs: TaskLogEntry[] = [createLog("任务已重新加入队列，等待执行。")];
 
-    return this.createQueuedInstallTask(input, [
-      createLog(`由失败任务重试创建：${task.title}`),
-      ...(legacyWarning ? [legacyWarning] : []),
-    ]);
+    if (!task.input) {
+      retryLogs.push(createLog("原任务缺少完整安装参数，已按标题恢复为全局安装任务。", "warn"));
+    }
+
+    task.status = "queued";
+    task.progress = 0;
+    task.download = undefined;
+    task.updatedAt = now;
+    task.logs = [...task.logs, ...retryLogs];
+
+    this.emitChanged();
+    this.startInstallTask(task.id, cloneInstallInput(input));
+    return this.cloneTask(task);
   }
 
   async clearFinishedTasks(): Promise<ManagedTask[]> {
@@ -217,11 +225,7 @@ export class TaskService extends EventEmitter {
       createdAt: now,
       updatedAt: now,
       input: cloneInstallInput(input),
-      logs: [
-        createLog("安装任务已创建。"),
-        createLog("安装器已进入执行队列。"),
-        ...additionalLogs,
-      ],
+      logs: [createLog("安装任务已创建。"), createLog("安装器已进入执行队列。"), ...additionalLogs],
     };
 
     this.tasks.unshift(task);
@@ -239,30 +243,33 @@ export class TaskService extends EventEmitter {
     this.tasks = data.tasks.map((task) => {
       const normalizedLogs = task.logs.map(normalizeTaskLog);
       const verificationLogIndex = getVerificationLogIndex(normalizedLogs);
-      const hasErrorAfterVerification
-        = verificationLogIndex >= 0 && normalizedLogs.slice(verificationLogIndex + 1).some((entry) => entry.level === "error");
+      const hasErrorAfterVerification =
+        verificationLogIndex >= 0 &&
+        normalizedLogs.slice(verificationLogIndex + 1).some((entry) => entry.level === "error");
       const normalizedTitle = task.title.toLowerCase();
       const hasMatchingInstallation = summary.installations.some((installation) => {
         const vendorMatches = !installation.vendor || normalizedTitle.includes(installation.vendor.toLowerCase());
         return (
-          normalizedTitle.includes(installation.environment.toLowerCase())
-          && normalizedTitle.includes(installation.version.toLowerCase())
-          && vendorMatches
+          normalizedTitle.includes(installation.environment.toLowerCase()) &&
+          normalizedTitle.includes(installation.version.toLowerCase()) &&
+          vendorMatches
         );
       });
       const interruptedAfterVerification = normalizedLogs.some((entry) =>
         entry.message.includes("任务尚未完成，已标记为中断"),
       );
-      const shouldRecoverCompleted
-        = task.status !== "succeeded"
-          && verificationLogIndex >= 0
-          && !hasErrorAfterVerification
-          && hasMatchingInstallation
-          && (["queued", "running"].includes(task.status) || interruptedAfterVerification);
+      const shouldRecoverCompleted =
+        task.status !== "succeeded" &&
+        verificationLogIndex >= 0 &&
+        !hasErrorAfterVerification &&
+        hasMatchingInstallation &&
+        (["queued", "running"].includes(task.status) || interruptedAfterVerification);
 
       if (shouldRecoverCompleted) {
         changed = true;
-        const alreadyLogged = normalizedLogs.some((entry) => entry.message === "检测到安装记录和验证日志，已恢复任务为成功。");
+        const alreadyLogged = normalizedLogs.some(
+          (entry) => entry.message === "检测到安装记录和验证日志，已恢复任务为成功。",
+        );
 
         return {
           ...task,
@@ -287,10 +294,7 @@ export class TaskService extends EventEmitter {
         ...task,
         status: "failed",
         updatedAt: now,
-        logs: [
-          ...normalizedLogs,
-          createLog("程序重启时任务尚未完成，已标记为中断。请重新创建安装任务。", "warn"),
-        ],
+        logs: [...normalizedLogs, createLog("程序重启时任务尚未完成，已标记为中断。可重试此任务。", "warn")],
       };
     });
 

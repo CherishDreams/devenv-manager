@@ -1,4 +1,10 @@
-import type { AppConfig, DiscoveredEnvironment, EnvironmentDefinition, EnvironmentKind, EnvironmentSummary } from "../../shared/types";
+import type {
+  AppConfig,
+  DiscoveredEnvironment,
+  EnvironmentDefinition,
+  EnvironmentKind,
+  EnvironmentSummary,
+} from "../../shared/types";
 import type { ConfigService } from "./configService";
 import type { EnvironmentRecordService } from "./environmentRecordService";
 import { execFile } from "node:child_process";
@@ -30,7 +36,10 @@ interface DiscoveryContext {
 }
 
 function normalizePath(value: string): string {
-  return resolve(value).replace(/[\\/]+/g, "\\").replace(/\\+$/, "").toLowerCase();
+  return resolve(value)
+    .replace(/[\\/]+/g, "\\")
+    .replace(/\\+$/, "")
+    .toLowerCase();
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -198,7 +207,9 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         verify: (rootPath) => ({ command: join(rootPath, "Scripts", "conda.exe"), args: ["--version"] }),
         rootFromExecutable: (executablePath) => {
           const directory = dirname(executablePath);
-          return ["Scripts", "condabin"].includes(directory.split(/[\\/]/).at(-1) ?? "") ? dirname(directory) : directory;
+          return ["Scripts", "condabin"].includes(directory.split(/[\\/]/).at(-1) ?? "")
+            ? dirname(directory)
+            : directory;
         },
         parseVersion: firstVersion,
       },
@@ -338,7 +349,10 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
       {
         environment: "android",
         commands: ["sdkmanager.bat", "adb.exe"],
-        verify: (rootPath) => ({ command: join(rootPath, "cmdline-tools", "bin", "sdkmanager.bat"), args: ["--version"] }),
+        verify: (rootPath) => ({
+          command: join(rootPath, "cmdline-tools", "bin", "sdkmanager.bat"),
+          args: ["--version"],
+        }),
         rootFromExecutable: (executablePath) => {
           const directory = dirname(executablePath);
           return directory.toLowerCase().endsWith("platform-tools") ? dirname(directory) : dirname(dirname(directory));
@@ -430,7 +444,13 @@ async function listDatabaseServices(): Promise<ServiceInfo[]> {
   ].join("; ");
 
   try {
-    const output = await runProcess("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command]);
+    const output = await runProcess("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      command,
+    ]);
     const parsed = JSON.parse(output || "[]") as ServiceInfo[] | ServiceInfo;
     return Array.isArray(parsed) ? parsed : [parsed];
   } catch {
@@ -544,10 +564,10 @@ export class EnvironmentDiscoveryService {
     const key = `${probe.environment}:${normalizedPath}`;
 
     if (
-      discovered.has(key)
-      || isWindowsAppsPath(installPath)
-      || isExcludedRoot(installPath, context.excludedRoots)
-      || !(await pathExists(installPath))
+      discovered.has(key) ||
+      isWindowsAppsPath(installPath) ||
+      isExcludedRoot(installPath, context.excludedRoots) ||
+      !(await pathExists(installPath))
     ) {
       return;
     }

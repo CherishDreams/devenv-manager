@@ -30,7 +30,10 @@ export interface IpcServices {
   versionCatalogService: VersionCatalogService;
 }
 
-async function ensureAdministratorForEnvironmentWrite(services: IpcServices, relaunchArgs: string[] = []): Promise<void> {
+async function ensureAdministratorForEnvironmentWrite(
+  services: IpcServices,
+  relaunchArgs: string[] = [],
+): Promise<void> {
   if (await services.systemStatusService.isAdministrator()) {
     return;
   }
@@ -169,7 +172,10 @@ export function registerIpc(mainWindow: BrowserWindow, services: IpcServices): v
         throw new Error("该安装任务需要管理员权限。");
       }
 
-      await ensureAdministratorForEnvironmentWrite(services, ["--env-manager-create-install", encodeInstallInput(input)]);
+      await ensureAdministratorForEnvironmentWrite(services, [
+        "--env-manager-create-install",
+        encodeInstallInput(input),
+      ]);
     }
 
     return services.taskService.createInstallTask(input);
@@ -178,12 +184,19 @@ export function registerIpc(mainWindow: BrowserWindow, services: IpcServices): v
   ipcMain.handle("tasks:retry", async (_, id: string, authorized = false) => {
     const input = await services.taskService.getRetryInput(id);
 
-    if (input && (await installNeedsElevation(services, input)) && !(await services.systemStatusService.isAdministrator())) {
+    if (
+      input &&
+      (await installNeedsElevation(services, input)) &&
+      !(await services.systemStatusService.isAdministrator())
+    ) {
       if (!authorized) {
         throw new Error("重试该安装任务需要管理员权限。");
       }
 
-      await ensureAdministratorForEnvironmentWrite(services, ["--env-manager-create-install", encodeInstallInput(input)]);
+      await ensureAdministratorForEnvironmentWrite(services, [
+        "--env-manager-create-install",
+        encodeInstallInput(input),
+      ]);
     }
 
     return services.taskService.retryTask(id);
@@ -191,7 +204,9 @@ export function registerIpc(mainWindow: BrowserWindow, services: IpcServices): v
   ipcMain.handle("tasks:remove", (_, id: string) => services.taskService.removeTask(id));
   ipcMain.handle("tasks:clear-finished", () => services.taskService.clearFinishedTasks());
 
-  ipcMain.handle("catalog:list-versions", (_, query: VersionCatalogQuery) => services.versionCatalogService.listVersions(query));
+  ipcMain.handle("catalog:list-versions", (_, query: VersionCatalogQuery) =>
+    services.versionCatalogService.listVersions(query),
+  );
 
   ipcMain.handle("dialog:select-directory", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {

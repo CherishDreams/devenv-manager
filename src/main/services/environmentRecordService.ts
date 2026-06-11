@@ -15,7 +15,6 @@ import { app } from "electron";
 import { environmentDefinitions } from "../../shared/environmentDefinitions";
 import {
   defaultEnvironmentData,
-
   getActiveByKind,
   getCurrentLinkPath,
   getDefinition,
@@ -29,7 +28,6 @@ import {
 import {
   applyRegistryPlan,
   cleanupRegistryPlan,
-
   registryNeedsCleanup,
   registryNeedsUpdate,
   synchronizeProcessEnvironment,

@@ -9,8 +9,8 @@ export async function resolveMavenResource(
   signal: AbortSignal,
 ): Promise<PackageResource> {
   const configuredMirror = config.mirrors.maven.trim();
-  const repositoryBaseUrl
-    = configuredMirror && configuredMirror !== "official"
+  const repositoryBaseUrl =
+    configuredMirror && configuredMirror !== "official"
       ? configuredMirror.replace(/\/+$/, "")
       : "https://repo.maven.apache.org/maven2";
   const metadata = await fetchText(

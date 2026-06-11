@@ -39,7 +39,9 @@ export async function resolveGoResource(
     getGoDownloadSource("Go 中国镜像", "https://golang.google.cn"),
   ];
   const { data: releases, source } = await fetchJsonFromSources<GoRelease[]>(sources, config, signal);
-  const release = releases.find((item) => item.version === `go${input.version}` || item.version.startsWith(`go${input.version}.`));
+  const release = releases.find(
+    (item) => item.version === `go${input.version}` || item.version.startsWith(`go${input.version}.`),
+  );
   const file = release?.files.find((item) => item.os === "windows" && item.arch === "amd64" && item.kind === "archive");
 
   if (!release || !file) {

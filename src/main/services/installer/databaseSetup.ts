@@ -6,10 +6,7 @@ import type {
 } from "../../../shared/types";
 import { copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  isConfigurableDatabaseEnvironment,
-  mergeDatabaseInstallConfig,
-} from "../../../shared/databaseInstallConfig";
+import { isConfigurableDatabaseEnvironment, mergeDatabaseInstallConfig } from "../../../shared/databaseInstallConfig";
 import { compareVersion } from "./environmentMetadata";
 import { pathExists } from "./fileSystem";
 import { runProcess } from "./process";
@@ -167,7 +164,17 @@ async function setupPostgreSql(
     onLog("正在初始化 PostgreSQL data 目录，默认用户 postgres，认证方式 trust。");
     await runProcess(
       initdbPath,
-      ["-D", dataDir, "-U", "postgres", "-A", "trust", "-E", charset, locale === "C" ? "--no-locale" : `--locale=${locale}`],
+      [
+        "-D",
+        dataDir,
+        "-U",
+        "postgres",
+        "-A",
+        "trust",
+        "-E",
+        charset,
+        locale === "C" ? "--no-locale" : `--locale=${locale}`,
+      ],
       signal,
     );
   }
@@ -231,7 +238,15 @@ async function setupMongoDb(
 
   await runProcess(
     mongodPath,
-    ["--config", configPath, "--install", "--serviceName", config.serviceName, "--serviceDisplayName", config.serviceName],
+    [
+      "--config",
+      configPath,
+      "--install",
+      "--serviceName",
+      config.serviceName,
+      "--serviceDisplayName",
+      config.serviceName,
+    ],
     signal,
   );
   onLog(`已注册 MongoDB Windows 服务：${config.serviceName}`);
@@ -291,7 +306,10 @@ export async function applyDatabaseInstallConfig(
     return;
   }
 
-  const config = normalizeConfig(input.environment, mergeDatabaseInstallConfig(input.environment, input.databaseConfig));
+  const config = normalizeConfig(
+    input.environment,
+    mergeDatabaseInstallConfig(input.environment, input.databaseConfig),
+  );
 
   if (!config.enabled) {
     onLog("已跳过数据库运行配置。", "warn");

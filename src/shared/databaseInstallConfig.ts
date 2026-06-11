@@ -1,8 +1,4 @@
-import type {
-  ConfigurableDatabaseEnvironmentKind,
-  DatabaseInstallConfig,
-  EnvironmentKind,
-} from "./types";
+import type { ConfigurableDatabaseEnvironmentKind, DatabaseInstallConfig, EnvironmentKind } from "./types";
 
 export const configurableDatabaseKinds = ["mysql", "postgresql", "mongodb", "redis"] as const;
 

@@ -64,7 +64,7 @@ export const useTaskStore = create<TaskState>((set) => ({
     try {
       const task = await envManagerApi.tasks.retry(id, authorized);
       set((state) => ({
-        tasks: [task, ...state.tasks.filter((item) => item.id !== task.id)],
+        tasks: state.tasks.map((item) => (item.id === task.id ? task : item)),
         loading: false,
       }));
       return task;

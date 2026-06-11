@@ -1,13 +1,6 @@
 import type { AppConfig, AvailableVersion } from "../../../shared/types";
 import { getMirrorVersionNote } from "../../../shared/mirrorPresets";
-import {
-  compareVersionsDesc,
-  createVersion,
-  fetchText,
-  getMirrorBaseUrl,
-  maxVersionOptions,
-  unique,
-} from "./utils";
+import { compareVersionsDesc, createVersion, fetchText, getMirrorBaseUrl, maxVersionOptions, unique } from "./utils";
 
 export async function listPythonVersions(config: AppConfig): Promise<AvailableVersion[]> {
   const configuredMirror = config.mirrors.python.trim();

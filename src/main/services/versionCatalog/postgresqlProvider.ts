@@ -1,5 +1,12 @@
 import type { AppConfig, AvailableVersion } from "../../../shared/types";
-import { compareVersionsDesc, createVersion, fetchText, getStaticVersionsWithMirrorNote, maxVersionOptions, unique } from "./utils";
+import {
+  compareVersionsDesc,
+  createVersion,
+  fetchText,
+  getStaticVersionsWithMirrorNote,
+  maxVersionOptions,
+  unique,
+} from "./utils";
 
 function getPostgresqlChannel(version: string, index: number): AvailableVersion["channel"] {
   const major = Number.parseInt(version.split(".")[0], 10);
@@ -28,15 +35,17 @@ export async function listPostgresqlVersions(config: AppConfig): Promise<Availab
   const page = await fetchText("https://www.enterprisedb.com/download-postgresql-binaries", config);
   const versions = parsePostgresqlWindowsVersions(page);
 
-  return versions.slice(0, maxVersionOptions).map((version, index) =>
-    createVersion(
-      "postgresql",
-      "edb",
-      version,
-      `PostgreSQL ${version}`,
-      getPostgresqlChannel(version, index),
-      "archive",
-      "来自 EDB PostgreSQL Binaries 下载页",
-    ),
-  );
+  return versions
+    .slice(0, maxVersionOptions)
+    .map((version, index) =>
+      createVersion(
+        "postgresql",
+        "edb",
+        version,
+        `PostgreSQL ${version}`,
+        getPostgresqlChannel(version, index),
+        "archive",
+        "来自 EDB PostgreSQL Binaries 下载页",
+      ),
+    );
 }

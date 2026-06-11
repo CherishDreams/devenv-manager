@@ -55,7 +55,10 @@ export function createVersionSelectOption(version: AvailableVersion): VersionSel
   return {
     value: version.id,
     label: version.label,
-    searchText: [version.label, version.version, version.channel, version.notes].filter(Boolean).join(" ").toLowerCase(),
+    searchText: [version.label, version.version, version.channel, version.notes]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase(),
     version,
   };
 }

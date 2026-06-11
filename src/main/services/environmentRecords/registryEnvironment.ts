@@ -24,7 +24,10 @@ const machineEnvironmentRegistryKey = "HKLM\\SYSTEM\\CurrentControlSet\\Control\
 const registryBackupDirName = "registry-backups";
 
 function normalizePathEntry(value: string): string {
-  return value.trim().replace(/[\\/]+$/, "").toLowerCase();
+  return value
+    .trim()
+    .replace(/[\\/]+$/, "")
+    .toLowerCase();
 }
 
 function splitPathValue(value: string | undefined): string[] {
@@ -95,7 +98,7 @@ function runProcess(command: string, args: string[], timeoutMs = 30_000): Promis
 }
 
 function decodeRegistryExport(buffer: Buffer): string {
-  if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) {
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
     return buffer.subarray(2).toString("utf16le");
   }
 
@@ -106,7 +109,11 @@ function unescapeRegistryString(value: string): string {
   return value.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
 }
 
-function readContinuedRegistryValue(lines: string[], startIndex: number, firstValue: string): { value: string; endIndex: number } {
+function readContinuedRegistryValue(
+  lines: string[],
+  startIndex: number,
+  firstValue: string,
+): { value: string; endIndex: number } {
   let value = firstValue.trim();
   let index = startIndex;
 
@@ -176,8 +183,16 @@ async function readMachineEnvironmentValues(names: string[]): Promise<Record<str
   }
 }
 
-async function writeMachineEnvironmentValue(name: string, value: string, type: "REG_SZ" | "REG_EXPAND_SZ"): Promise<void> {
-  await runProcess("reg.exe", ["add", machineEnvironmentRegistryKey, "/v", name, "/t", type, "/d", value, "/f"], 15_000);
+async function writeMachineEnvironmentValue(
+  name: string,
+  value: string,
+  type: "REG_SZ" | "REG_EXPAND_SZ",
+): Promise<void> {
+  await runProcess(
+    "reg.exe",
+    ["add", machineEnvironmentRegistryKey, "/v", name, "/t", type, "/d", value, "/f"],
+    15_000,
+  );
 }
 
 async function deleteMachineEnvironmentValue(name: string): Promise<void> {
@@ -188,7 +203,11 @@ async function backupMachineEnvironmentRegistry(): Promise<void> {
   const backupDir = join(app.getPath("userData"), registryBackupDirName);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   await mkdir(backupDir, { recursive: true });
-  await runProcess("reg.exe", ["export", machineEnvironmentRegistryKey, join(backupDir, `environment-${timestamp}.reg`), "/y"], 15_000);
+  await runProcess(
+    "reg.exe",
+    ["export", machineEnvironmentRegistryKey, join(backupDir, `environment-${timestamp}.reg`), "/y"],
+    15_000,
+  );
 }
 
 export async function registryNeedsUpdate(plan: EnvironmentApplyPlan): Promise<boolean> {

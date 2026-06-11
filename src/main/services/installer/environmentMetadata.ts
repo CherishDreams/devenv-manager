@@ -46,7 +46,10 @@ export function getEnvVars(definition: EnvironmentDefinition, installPath: strin
   return Object.fromEntries(definition.envVars.map((name) => [name, installPath]));
 }
 
-export function getVerificationCommand(environment: EnvironmentKind, installPath: string): { command: string; args: string[] } {
+export function getVerificationCommand(
+  environment: EnvironmentKind,
+  installPath: string,
+): { command: string; args: string[] } {
   switch (environment) {
     case "java":
       return { command: join(installPath, "bin", "java.exe"), args: ["-version"] };

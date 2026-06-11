@@ -1,27 +1,27 @@
-export type EnvironmentKind
-  = | "java"
-    | "python"
-    | "conda"
-    | "go"
-    | "node"
-    | "nvm"
-    | "maven"
-    | "gradle"
-    | "cmake"
-    | "ninja"
-    | "cpp"
-    | "lua"
-    | "rust"
-    | "dotnet"
-    | "php"
-    | "ruby"
-    | "flutter"
-    | "android"
-    | "mysql"
-    | "postgresql"
-    | "mongodb"
-    | "redis"
-    | "sqlite";
+export type EnvironmentKind =
+  | "java"
+  | "python"
+  | "conda"
+  | "go"
+  | "node"
+  | "nvm"
+  | "maven"
+  | "gradle"
+  | "cmake"
+  | "ninja"
+  | "cpp"
+  | "lua"
+  | "rust"
+  | "dotnet"
+  | "php"
+  | "ruby"
+  | "flutter"
+  | "android"
+  | "mysql"
+  | "postgresql"
+  | "mongodb"
+  | "redis"
+  | "sqlite";
 
 export type InstallScope = "global" | "custom";
 
@@ -181,11 +181,11 @@ export interface InstallTaskInput {
   databaseConfig?: DatabaseInstallConfig;
 }
 
-export type PrivilegeCheckInput
-  = | { type: "set-active"; environment: EnvironmentKind; id: string }
-    | { type: "uninstall"; id: string }
-    | { type: "install"; input: InstallTaskInput }
-    | { type: "retry"; id: string };
+export type PrivilegeCheckInput =
+  | { type: "set-active"; environment: EnvironmentKind; id: string }
+  | { type: "uninstall"; id: string }
+  | { type: "install"; input: InstallTaskInput }
+  | { type: "retry"; id: string };
 
 export interface PrivilegeRequirement {
   required: boolean;

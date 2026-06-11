@@ -11,8 +11,8 @@ export function resolveLuaResource(input: InstallTaskInput, config: AppConfig): 
 
   const fileName = `lua-${input.version}_Win64_bin.zip`;
   const configuredMirror = config.mirrors.lua.trim();
-  const baseUrl
-    = configuredMirror && configuredMirror !== "official"
+  const baseUrl =
+    configuredMirror && configuredMirror !== "official"
       ? configuredMirror.replace(/\/+$/, "")
       : `https://sourceforge.net/projects/luabinaries/files/${input.version}/Tools%20Executables`;
 
