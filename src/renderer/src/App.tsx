@@ -68,7 +68,7 @@ function renderPage(pageKey: PageKey): React.ReactNode {
     case "logs":
       return <LogsPage />;
     case "settings":
-      return <SettingsPage />;
+      return <SettingsPage key="settings" />;
     case "dashboard":
     default:
       return <DashboardPage />;

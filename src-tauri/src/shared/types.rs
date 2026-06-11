@@ -97,7 +97,7 @@ pub enum EnvironmentOwnership {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub enum UninstallPolicy {
     DeleteDirectory,
     RemoveRecordOnly,

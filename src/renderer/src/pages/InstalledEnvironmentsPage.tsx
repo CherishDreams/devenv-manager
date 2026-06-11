@@ -16,9 +16,9 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
   const { message } = AntdApp.useApp();
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [discovering, setDiscovering] = useState(false);
-  const [discovered, setDiscovered] = useState<DiscoveredEnvironment[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const summary = useEnvironmentStore((state) => state.summary);
+  const discovered = useEnvironmentStore((state) => state.discovered);
   const loading = useEnvironmentStore((state) => state.loading);
   const error = useEnvironmentStore((state) => state.error);
   const discoverExisting = useEnvironmentStore((state) => state.discoverExisting);
@@ -44,13 +44,29 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
 
   const openDiscovery = useCallback(async () => {
     setDiscoveryOpen(true);
+    // Use cached results if available
+    if (discovered.length > 0) {
+      setSelectedRowKeys(discovered.filter((item) => !item.alreadyManaged).map((item) => item.id));
+      return;
+    }
     setDiscovering(true);
-
     try {
       const nextDiscovered = await discoverExisting();
-      setDiscovered(nextDiscovered);
       setSelectedRowKeys(nextDiscovered.filter((item) => !item.alreadyManaged).map((item) => item.id));
       message.success(`扫描完成，发现 ${nextDiscovered.length} 个环境`);
+    } catch (error) {
+      message.error(getErrorMessage(error));
+    } finally {
+      setDiscovering(false);
+    }
+  }, [discoverExisting, discovered, message]);
+
+  const rescanDiscovery = useCallback(async () => {
+    setDiscovering(true);
+    try {
+      const nextDiscovered = await discoverExisting(true);
+      setSelectedRowKeys(nextDiscovered.filter((item) => !item.alreadyManaged).map((item) => item.id));
+      message.success(`重新扫描完成，发现 ${nextDiscovered.length} 个环境`);
     } catch (error) {
       message.error(getErrorMessage(error));
     } finally {
@@ -68,7 +84,6 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
       await adoptExisting(selectedDiscovered.map(createAdoptInput));
       message.success(`已接管 ${selectedDiscovered.length} 个环境`);
       setDiscoveryOpen(false);
-      setDiscovered([]);
       setSelectedRowKeys([]);
     } catch (error) {
       message.error(getErrorMessage(error));
@@ -114,6 +129,7 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
         onSelectRows={setSelectedRowKeys}
         onCancel={() => setDiscoveryOpen(false)}
         onAdopt={() => void adoptSelected()}
+        onRescan={rescanDiscovery}
       />
     </div>
   );

@@ -25,6 +25,7 @@ fn normalize_path(value: &str) -> String {
     let resolved = std::fs::canonicalize(value)
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| value.to_string());
+    let resolved = resolved.strip_prefix("\\\\?\\").unwrap_or(&resolved);
     let normalized = resolved.replace('/', "\\");
     let trimmed = normalized.trim_end_matches('\\');
     trimmed.to_lowercase()
@@ -769,9 +770,12 @@ impl EnvironmentDiscoveryService {
     }
 
     async fn normalize_candidate_root(&self, probe: &Probe, root_path: &str) -> String {
-        let install_path = std::fs::canonicalize(root_path)
+        let mut install_path = std::fs::canonicalize(root_path)
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| root_path.to_string());
+        if let Some(stripped) = install_path.strip_prefix("\\\\?\\") {
+            install_path = stripped.to_string();
+        }
 
         // Special case for Java: if root ends with "jre", check if parent has bin/java.exe
         if probe.environment == EnvironmentKind::Java {

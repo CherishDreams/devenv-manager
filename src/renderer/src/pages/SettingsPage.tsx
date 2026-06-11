@@ -78,6 +78,15 @@ export default function SettingsPage(): React.ReactElement {
   const clearVersions = useCatalogStore((state) => state.clearVersions);
   const { themeStyle, setThemeStyle } = useUiStore();
 
+  // Serialize config to create a stable key for form re-initialization
+  const configKey = config ? JSON.stringify(config) : "";
+
+  useEffect(() => {
+    if (config) {
+      form.setFieldsValue(config);
+    }
+  }, [configKey, form]);
+
   const definitionsById = useMemo(
     () => new Map(environmentDefinitions.map((definition) => [definition.id, definition])),
     [],

@@ -1,8 +1,8 @@
 import type { DiscoveredEnvironment, EnvironmentDefinition, EnvironmentKind } from "@shared/types";
 import type { TableColumnsType } from "antd";
 import type React from "react";
-import { ImportOutlined } from "@ant-design/icons";
-import { Alert, Modal, Space, Table, Tag, Typography } from "antd";
+import { ImportOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Alert, Button, Modal, Space, Table, Tag, Typography } from "antd";
 import { useMemo } from "react";
 import { EnvironmentLogo } from "../../components/EnvironmentLogo";
 
@@ -72,6 +72,7 @@ export function DiscoveryModal({
   onSelectRows,
   onCancel,
   onAdopt,
+  onRescan,
 }: {
   open: boolean;
   loading: boolean;
@@ -83,6 +84,7 @@ export function DiscoveryModal({
   onSelectRows: (keys: React.Key[]) => void;
   onCancel: () => void;
   onAdopt: () => void;
+  onRescan?: () => void;
 }): React.ReactElement {
   const discoveryColumns = useMemo(() => createDiscoveryColumns(definitions), [definitions]);
 
@@ -101,6 +103,29 @@ export function DiscoveryModal({
       cancelText="取消"
       onOk={onAdopt}
       onCancel={onCancel}
+      footer={
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            {onRescan ? (
+              <Button icon={<ReloadOutlined />} loading={discovering} onClick={onRescan}>
+                再次扫描
+              </Button>
+            ) : null}
+          </div>
+          <Space>
+            <Button onClick={onCancel}>取消</Button>
+            <Button
+              type="primary"
+              icon={<ImportOutlined />}
+              disabled={selectedCount === 0}
+              loading={loading}
+              onClick={onAdopt}
+            >
+              接管选中环境
+            </Button>
+          </Space>
+        </div>
+      }
     >
       <Space direction="vertical" size={12} className="full-width">
         <Alert

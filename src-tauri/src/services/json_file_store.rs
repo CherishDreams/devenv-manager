@@ -73,6 +73,24 @@ where
         Ok(())
     }
 
+    /// Reads the file as raw JSON, or returns the default value serialized if the file is missing or invalid.
+    pub async fn read_raw_json(&self) -> AppResult<serde_json::Value> {
+        let _guard = self.lock.lock().await;
+
+        match fs::read_to_string(&self.path).await {
+            Ok(content) => {
+                match serde_json::from_str::<serde_json::Value>(&content) {
+                    Ok(value) if value.is_object() => Ok(value),
+                    _ => Ok(serde_json::to_value(&self.default)?),
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                Ok(serde_json::to_value(&self.default)?)
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub async fn update<F>(&self, updater: F) -> AppResult<T>
     where
         F: FnOnce(T) -> T,

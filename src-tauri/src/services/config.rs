@@ -6,6 +6,7 @@ use crate::error::AppResult;
 use super::json_file_store::JsonFileStore;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     pub global_install_dir: String,
     pub download_cache_dir: String,
@@ -17,16 +18,19 @@ pub struct AppConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppearanceConfig {
     pub navigation_layout: String, // "sidebar" | "rail"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EnvironmentManagementConfig {
     pub mode: String, // "symlink" | "direct"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProxyConfig {
     pub enabled: bool,
     pub http_proxy: String,
@@ -76,37 +80,117 @@ impl ConfigService {
     }
 
     pub async fn get(&self) -> AppResult<AppConfig> {
-        let config = self.store.read().await?;
+        let raw = self.store.read_raw_json().await?;
+        let normalized = normalize_keys_to_camel_case(&raw);
+        let defaults = serde_json::to_value(AppConfig::default())?;
+        let filled = fill_missing_fields(&normalized, &defaults);
+        let config: AppConfig = serde_json::from_value(filled)?;
         Ok(self.normalize_config(config))
     }
 
     pub async fn update(&self, patch: serde_json::Value) -> AppResult<AppConfig> {
-        let new_config = self
-            .store
-            .update(|current| {
-                let normalized = self.normalize_config(current);
-                // Merge patch into config
-                let mut merged = serde_json::to_value(normalized).unwrap();
-                merge_json(&mut merged, &patch);
-                serde_json::from_value(merged).unwrap_or_default()
-            })
-            .await?;
+        let raw = self.store.read_raw_json().await?;
+        let normalized = normalize_keys_to_camel_case(&raw);
+        let defaults = serde_json::to_value(AppConfig::default())?;
+        let filled = fill_missing_fields(&normalized, &defaults);
+        let mut merged = filled;
+        merge_json(&mut merged, &patch);
 
-        Ok(self.normalize_config(new_config))
+        let config: AppConfig = serde_json::from_value(merged.clone()).unwrap_or_else(|_| {
+            let d = serde_json::to_value(AppConfig::default()).unwrap();
+            serde_json::from_value(d).unwrap()
+        });
+        let result = self.normalize_config(config);
+
+        self.store.write(&result).await?;
+        Ok(result)
     }
 
     fn normalize_config(&self, mut config: AppConfig) -> AppConfig {
         let defaults = AppConfig::default();
 
-        // Apply defaults for missing fields
         if config.global_install_dir.is_empty() {
             config.global_install_dir = defaults.global_install_dir;
         }
         if config.download_cache_dir.is_empty() {
             config.download_cache_dir = defaults.download_cache_dir;
         }
+        if config.appearance.navigation_layout.is_empty() {
+            config.appearance.navigation_layout = defaults.appearance.navigation_layout;
+        }
+        if config.environment_management.mode.is_empty() {
+            config.environment_management.mode = defaults.environment_management.mode;
+        }
 
         config
+    }
+}
+
+/// Converts snake_case keys to camelCase in a JSON value.
+/// This handles migration from older config files that used snake_case keys.
+fn normalize_keys_to_camel_case(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut new_map = serde_json::Map::new();
+            for (key, val) in map {
+                let camel_key = snake_to_camel(key);
+                new_map.insert(camel_key, normalize_keys_to_camel_case(val));
+            }
+            serde_json::Value::Object(new_map)
+        }
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(normalize_keys_to_camel_case).collect())
+        }
+        other => other.clone(),
+    }
+}
+
+/// Converts a snake_case string to camelCase.
+fn snake_to_camel(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut capitalize_next = false;
+    for (i, ch) in s.chars().enumerate() {
+        if ch == '_' {
+            capitalize_next = true;
+        } else if capitalize_next {
+            result.extend(ch.to_uppercase());
+            capitalize_next = false;
+        } else {
+            if i == 0 {
+                result.extend(ch.to_lowercase());
+            } else {
+                result.push(ch);
+            }
+        }
+    }
+    result
+}
+
+/// Recursively fills missing fields in `value` from `defaults`.
+/// Also treats empty strings as "missing" and replaces them with defaults.
+fn fill_missing_fields(value: &serde_json::Value, defaults: &serde_json::Value) -> serde_json::Value {
+    match (value.as_object(), defaults.as_object()) {
+        (Some(_), Some(def_obj)) => {
+            let mut result = value.clone();
+            let result_obj = result.as_object_mut().unwrap();
+            for (key, def_val) in def_obj {
+                if let Some(val) = result_obj.get(key) {
+                    if val.is_object() && def_val.is_object() {
+                        // Recurse into nested objects
+                        result_obj.insert(key.clone(), fill_missing_fields(val, def_val));
+                    } else if val.is_string() && val.as_str().map_or(true, str::is_empty) && def_val.is_string() {
+                        // Replace empty strings with default values
+                        result_obj.insert(key.clone(), def_val.clone());
+                    }
+                    // For non-empty values, keep the existing value
+                } else {
+                    // Key is missing entirely, use default
+                    result_obj.insert(key.clone(), def_val.clone());
+                }
+            }
+            result
+        }
+        _ => value.clone(),
     }
 }
 

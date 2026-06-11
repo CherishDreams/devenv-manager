@@ -5,18 +5,20 @@ import { envManagerApi } from "../api/envManagerApi";
 
 interface EnvironmentState {
   summary?: EnvironmentSummary;
+  discovered: DiscoveredEnvironment[];
   loading: boolean;
   error?: string;
   load: () => Promise<void>;
-  discoverExisting: () => Promise<DiscoveredEnvironment[]>;
+  discoverExisting: (force?: boolean) => Promise<DiscoveredEnvironment[]>;
   adoptExisting: (inputs: AdoptEnvironmentInput[]) => Promise<void>;
   setActive: (environment: EnvironmentKind, id: string, authorized?: boolean) => Promise<void>;
   uninstall: (id: string, authorized?: boolean) => Promise<void>;
   subscribeToEnvironmentEvents: () => () => void;
 }
 
-export const useEnvironmentStore = create<EnvironmentState>((set) => ({
+export const useEnvironmentStore = create<EnvironmentState>((set, get) => ({
   summary: undefined,
+  discovered: [],
   loading: false,
   error: undefined,
   load: async () => {
@@ -29,11 +31,15 @@ export const useEnvironmentStore = create<EnvironmentState>((set) => ({
       set({ error: `加载环境列表失败: ${getErrorMessage(error)}`, loading: false });
     }
   },
-  discoverExisting: async () => {
+  discoverExisting: async (force = false) => {
+    // Return cached results unless force is true
+    if (!force && get().discovered.length > 0) {
+      return get().discovered;
+    }
     set({ loading: true, error: undefined });
     try {
       const discovered = await envManagerApi.environments.discover();
-      set({ loading: false });
+      set({ discovered, loading: false });
       return discovered;
     } catch (error) {
       console.error("[environmentStore] Failed to discover:", error);
