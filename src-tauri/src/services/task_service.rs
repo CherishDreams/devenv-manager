@@ -126,7 +126,7 @@ impl TaskService {
                 // Persist and emit
                 let data = TaskData { tasks: tasks.clone() };
                 let _ = store_for_loop.write(&data).await;
-                let _ = app_handle_loop.emit("task:changed", &*tasks);
+                let _ = app_handle_loop.emit("tasks:changed", &*tasks);
             }
         });
 
@@ -210,7 +210,7 @@ impl TaskService {
 
         self.tasks.insert(0, task.clone());
         self.persist().await;
-        let _ = self.app_handle.emit("task:changed", &self.tasks);
+        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
 
         let task_id = task.id.clone();
         self.start_install_task(&task_id, clone_input(&input));
@@ -243,7 +243,7 @@ impl TaskService {
         }
 
         self.persist().await;
-        let _ = self.app_handle.emit("task:changed", &self.tasks);
+        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
 
         let task_id = id.to_string();
         self.start_install_task(&task_id, clone_input(&input));
@@ -268,7 +268,7 @@ impl TaskService {
         }
 
         self.persist().await;
-        let _ = self.app_handle.emit("task:changed", &self.tasks);
+        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
         self.tasks.iter().find(|t| t.id == id).cloned()
     }
 
@@ -281,14 +281,14 @@ impl TaskService {
         }
         self.tasks.retain(|t| t.id != id);
         self.persist().await;
-        let _ = self.app_handle.emit("task:changed", &self.tasks);
+        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
         Ok(self.tasks.clone())
     }
 
     pub async fn clear_finished(&mut self) -> Vec<ManagedTask> {
         self.tasks.retain(|t| is_active(t));
         self.persist().await;
-        let _ = self.app_handle.emit("task:changed", &self.tasks);
+        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
         self.tasks.clone()
     }
 

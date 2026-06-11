@@ -91,13 +91,14 @@ pub fn run() {
             commands::environments_set_active,
             commands::environments_uninstall,
             commands::catalog_list_versions,
-            commands::task_list,
-            commands::task_create,
-            commands::task_cancel,
-            commands::task_retry,
-            commands::task_remove,
-            commands::task_clear_finished,
-            commands::task_get_retry_input,
+            commands::tasks_list,
+            commands::tasks_create_install,
+            commands::tasks_cancel,
+            commands::tasks_retry,
+            commands::tasks_remove,
+            commands::tasks_clear_finished,
+            commands::tasks_get_retry_input,
+            commands::permissions_check,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

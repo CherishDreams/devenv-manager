@@ -329,3 +329,33 @@ pub struct ManagedTask {
     pub download: Option<TaskDownloadProgress>,
     pub logs: Vec<TaskLogEntry>,
 }
+
+// ── Privilege Check ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum PrivilegeCheckInput {
+    SetActive { environment: EnvironmentKind, id: String },
+    Uninstall { id: String },
+    Install { input: InstallTaskInput },
+    Retry { id: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivilegeRequirement {
+    pub required: bool,
+    pub authorized: bool,
+    pub reason: String,
+    pub can_switch_to_symlink: bool,
+    pub current_mode: EnvironmentManagementMode,
+    pub authorization_mode: AuthorizationMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthorizationMode {
+    None,
+    ElevatedHelper,
+    RestartApp,
+}
