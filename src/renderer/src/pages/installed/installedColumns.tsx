@@ -1,7 +1,7 @@
+import type { InstallRecord } from "@shared/types";
+import type { TableColumnsType } from "antd";
 import { DeleteOutlined, PlayCircleOutlined } from "@ant-design/icons";
 import { Button, Popconfirm, Space, Tag, Typography } from "antd";
-import type { TableColumnsType } from "antd";
-import type { InstallRecord } from "@shared/types";
 
 export function createInstalledColumns(
   activeByKind: Record<string, string | undefined>,
@@ -67,7 +67,7 @@ export function createInstalledColumns(
               okText={actionText}
               okButtonProps={{ danger: true }}
               cancelText="取消"
-              onConfirm={() => uninstallRecord(record)}
+              onConfirm={() => void uninstallRecord(record)}
             >
               <Button danger size="small" icon={<DeleteOutlined />}>
                 {actionText}

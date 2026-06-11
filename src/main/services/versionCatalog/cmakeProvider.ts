@@ -1,5 +1,6 @@
 import type { AppConfig, AvailableVersion } from "../../../shared/types";
-import { createVersion, fetchJson, getStaticVersionsWithMirrorNote, type GitHubRelease, maxVersionOptions } from "./utils";
+import type { GitHubRelease } from "./utils";
+import { createVersion, fetchJson, getStaticVersionsWithMirrorNote, maxVersionOptions } from "./utils";
 
 function isCMakeWindowsAsset(name: string, version: string): boolean {
   return name === `cmake-${version}-windows-x86_64.zip`;

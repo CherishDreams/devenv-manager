@@ -1,6 +1,7 @@
+import type { AdoptEnvironmentInput, DiscoveredEnvironment, EnvironmentKind, EnvironmentSummary } from "@shared/types";
+import { getErrorMessage } from "@shared/errorUtils";
 import { create } from "zustand";
 import { envManagerApi } from "../api/envManagerApi";
-import type { AdoptEnvironmentInput, DiscoveredEnvironment, EnvironmentKind, EnvironmentSummary } from "@shared/types";
 
 interface EnvironmentState {
   summary?: EnvironmentSummary;
@@ -9,8 +10,8 @@ interface EnvironmentState {
   load: () => Promise<void>;
   discoverExisting: () => Promise<DiscoveredEnvironment[]>;
   adoptExisting: (inputs: AdoptEnvironmentInput[]) => Promise<void>;
-  setActive: (environment: EnvironmentKind, id: string) => Promise<void>;
-  uninstall: (id: string) => Promise<void>;
+  setActive: (environment: EnvironmentKind, id: string, authorized?: boolean) => Promise<void>;
+  uninstall: (id: string, authorized?: boolean) => Promise<void>;
   subscribeToEnvironmentEvents: () => () => void;
 }
 
@@ -24,7 +25,8 @@ export const useEnvironmentStore = create<EnvironmentState>((set) => ({
       const summary = await envManagerApi.environments.getSummary();
       set({ summary, loading: false });
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      console.error("[environmentStore] Failed to load summary:", error);
+      set({ error: `加载环境列表失败: ${getErrorMessage(error)}`, loading: false });
     }
   },
   discoverExisting: async () => {
@@ -34,7 +36,8 @@ export const useEnvironmentStore = create<EnvironmentState>((set) => ({
       set({ loading: false });
       return discovered;
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      console.error("[environmentStore] Failed to discover:", error);
+      set({ error: `扫描环境失败: ${getErrorMessage(error)}`, loading: false });
       throw error;
     }
   },
@@ -44,27 +47,30 @@ export const useEnvironmentStore = create<EnvironmentState>((set) => ({
       const summary = await envManagerApi.environments.adopt(inputs);
       set({ summary, loading: false });
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      console.error("[environmentStore] Failed to adopt:", error);
+      set({ error: `接管环境失败: ${getErrorMessage(error)}`, loading: false });
       throw error;
     }
   },
-  setActive: async (environment, id) => {
+  setActive: async (environment, id, authorized = false) => {
     set({ loading: true, error: undefined });
     try {
-      const summary = await envManagerApi.environments.setActive(environment, id);
+      const summary = await envManagerApi.environments.setActive(environment, id, authorized);
       set({ summary, loading: false });
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      console.error("[environmentStore] Failed to switch:", error);
+      set({ error: `切换激活环境失败: ${getErrorMessage(error)}`, loading: false });
       throw error;
     }
   },
-  uninstall: async (id) => {
+  uninstall: async (id, authorized = false) => {
     set({ loading: true, error: undefined });
     try {
-      const summary = await envManagerApi.environments.uninstall(id);
+      const summary = await envManagerApi.environments.uninstall(id, authorized);
       set({ summary, loading: false });
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      console.error("[environmentStore] Failed to uninstall:", error);
+      set({ error: `卸载环境失败: ${getErrorMessage(error)}`, loading: false });
       throw error;
     }
   },

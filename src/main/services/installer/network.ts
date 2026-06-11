@@ -1,49 +1,17 @@
+import type { AppConfig, TaskDownloadProgress } from "../../../shared/types";
 import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import { finished } from "node:stream/promises";
-import { fetch, ProxyAgent, type Dispatcher } from "undici";
-import type { AppConfig, TaskDownloadProgress } from "../../../shared/types";
+import { fetch } from "undici";
+import { getErrorMessage, parseResponseJsonAs } from "../../../shared/errorUtils";
+import { closeDispatcher, createProxyDispatcher, describeFetchError } from "../common/networkUtils";
 
-function describeFetchError(error: unknown): string {
-  const cause = (error as { cause?: { code?: string; message?: string } }).cause;
-  const details = [error instanceof Error ? error.message : String(error), cause?.code, cause?.message].filter(Boolean);
-  return details.join(" / ");
-}
-
-function getProxyUrl(url: string, config: AppConfig): string | undefined {
-  if (!config.proxy.enabled) {
-    return undefined;
-  }
-
-  const requestProtocol = new URL(url).protocol;
-  const preferredProxy = requestProtocol === "http:" ? config.proxy.httpProxy : config.proxy.httpsProxy;
-  const fallbackProxy = requestProtocol === "http:" ? config.proxy.httpsProxy : config.proxy.httpProxy;
-  const proxyUrl = (preferredProxy || fallbackProxy).trim();
-  return proxyUrl || undefined;
-}
-
-function createProxyDispatcher(url: string, config: AppConfig): Dispatcher | undefined {
-  const proxyUrl = getProxyUrl(url, config);
-
-  if (!proxyUrl) {
-    return undefined;
-  }
-
-  try {
-    return new ProxyAgent(proxyUrl);
-  } catch (error) {
-    throw new Error(`代理地址无效：${proxyUrl}\n${describeFetchError(error)}`);
-  }
-}
-
-async function closeDispatcher(dispatcher: Dispatcher | undefined): Promise<void> {
-  await dispatcher?.close().catch(() => undefined);
-}
+type FetchResponse = Awaited<ReturnType<typeof fetch>>;
 
 export async function fetchText(url: string, config: AppConfig, signal: AbortSignal): Promise<string> {
   const dispatcher = createProxyDispatcher(url, config);
-  let response: Awaited<ReturnType<typeof fetch>>;
+  let response: FetchResponse;
 
   try {
     response = await fetch(url, { dispatcher, signal });
@@ -65,7 +33,7 @@ export async function fetchText(url: string, config: AppConfig, signal: AbortSig
 
 export async function fetchJson<TData>(url: string, config: AppConfig, signal: AbortSignal): Promise<TData> {
   const dispatcher = createProxyDispatcher(url, config);
-  let response: Awaited<ReturnType<typeof fetch>>;
+  let response: FetchResponse;
 
   try {
     response = await fetch(url, { dispatcher, signal });
@@ -79,7 +47,7 @@ export async function fetchJson<TData>(url: string, config: AppConfig, signal: A
       throw new Error(`请求失败 ${response.status}: ${url}`);
     }
 
-    return (await response.json()) as TData;
+    return await parseResponseJsonAs<TData>(response, `fetchJson(${url})`);
   } finally {
     await closeDispatcher(dispatcher);
   }
@@ -103,7 +71,7 @@ export async function fetchJsonFromSources<TData>(
         throw error;
       }
 
-      errors.push(`${source.name}: ${(error as Error).message}`);
+      errors.push(`${source.name}: ${getErrorMessage(error)}`);
     }
   }
 
@@ -118,7 +86,7 @@ export async function downloadFile(
   onProgress: (progress: TaskDownloadProgress) => void,
 ): Promise<void> {
   const dispatcher = createProxyDispatcher(url, config);
-  let response: Awaited<ReturnType<typeof fetch>>;
+  let response: FetchResponse;
 
   try {
     response = await fetch(url, {
@@ -190,14 +158,15 @@ export async function downloadFile(
           throw new Error("任务已取消。");
         }
 
-        const { done, value } = await reader.read();
+        const chunk = await reader.read();
 
-        if (done) {
+        if (chunk.done || !chunk.value) {
           break;
         }
 
-        received += value.byteLength;
-        await writeChunk(Buffer.from(value));
+        const bytes = chunk.value as Uint8Array;
+        received += bytes.byteLength;
+        await writeChunk(Buffer.from(bytes));
 
         if (Date.now() - lastReportedAt >= 500) {
           emitProgress(false);

@@ -1,9 +1,9 @@
-import { ImportOutlined } from "@ant-design/icons";
-import { Alert, Modal, Space, Table, Tag, Typography } from "antd";
+import type { DiscoveredEnvironment, EnvironmentDefinition, EnvironmentKind } from "@shared/types";
 import type { TableColumnsType } from "antd";
 import type React from "react";
+import { ImportOutlined } from "@ant-design/icons";
+import { Alert, Modal, Space, Table, Tag, Typography } from "antd";
 import { useMemo } from "react";
-import type { DiscoveredEnvironment, EnvironmentDefinition, EnvironmentKind } from "@shared/types";
 import { EnvironmentLogo } from "../../components/EnvironmentLogo";
 
 function createDiscoveryColumns(definitions: EnvironmentDefinition[]): TableColumnsType<DiscoveredEnvironment> {

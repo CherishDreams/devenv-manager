@@ -1,3 +1,6 @@
+import type { ManagedTask, TaskDownloadProgress, TaskStatus } from "@shared/types";
+import type { TableColumnsType, TableProps } from "antd";
+import type React from "react";
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -8,11 +11,10 @@ import {
   StopOutlined,
   SyncOutlined,
 } from "@ant-design/icons";
+import { getErrorMessage } from "@shared/errorUtils";
 import { App as AntdApp, Badge, Button, Empty, List, Modal, Progress, Space, Table, Tag, Tooltip, Typography } from "antd";
-import type { TableColumnsType, TableProps } from "antd";
-import type React from "react";
 import { useCallback, useMemo, useState } from "react";
-import type { ManagedTask, TaskDownloadProgress, TaskStatus } from "@shared/types";
+import { usePrivilegeGuard } from "../hooks/usePrivilegeGuard";
 import { useTaskStore } from "../stores/taskStore";
 
 const statusMeta: Record<TaskStatus, { text: string; color: string; icon: React.ReactNode }> = {
@@ -126,6 +128,7 @@ export default function LogsPage(): React.ReactElement {
   const remove = useTaskStore((state) => state.remove);
   const clearFinished = useTaskStore((state) => state.clearFinished);
   const { message, modal } = AntdApp.useApp();
+  const { runWithPrivilege } = usePrivilegeGuard();
   const [logTaskId, setLogTaskId] = useState<string>();
 
   const activeTasks = useMemo(() => tasks.filter((task) => task.status === "queued" || task.status === "running"), [tasks]);
@@ -134,19 +137,22 @@ export default function LogsPage(): React.ReactElement {
   const activePagination = activeTasks.length > taskPageSize ? taskTablePagination : false;
   const historyPagination = historyTasks.length > taskPageSize ? taskTablePagination : false;
 
-  const retryTask = useCallback(
+  const handleRetryTask = useCallback(
     async (record: ManagedTask) => {
       try {
-        await retry(record.id);
-        message.success(`已重新创建 ${record.title} 的安装任务`);
+        const task = await runWithPrivilege({ type: "retry", id: record.id }, (authorized) => retry(record.id, authorized));
+
+        if (task) {
+          message.success(`已重新创建 ${record.title} 的安装任务`);
+        }
       } catch (error) {
-        message.error((error as Error).message);
+        message.error(getErrorMessage(error));
       }
     },
-    [message, retry],
+    [message, retry, runWithPrivilege],
   );
 
-  const removeTask = useCallback(
+  const handleRemoveTask = useCallback(
     (record: ManagedTask) => {
       modal.confirm({
         title: "移除任务记录",
@@ -160,7 +166,7 @@ export default function LogsPage(): React.ReactElement {
             setLogTaskId((current) => (current === record.id ? undefined : current));
             message.success("任务记录已移除");
           } catch (error) {
-            message.error((error as Error).message);
+            message.error(getErrorMessage(error));
             throw error;
           }
         },
@@ -169,7 +175,7 @@ export default function LogsPage(): React.ReactElement {
     [message, modal, remove],
   );
 
-  const clearHistory = useCallback(() => {
+  const handleClearHistory = useCallback(() => {
     modal.confirm({
       title: "清理历史任务",
       content: `确认清理 ${historyTasks.length} 条已结束任务记录和日志？进行中的任务会保留。`,
@@ -182,7 +188,7 @@ export default function LogsPage(): React.ReactElement {
           setLogTaskId(undefined);
           message.success("历史任务已清理");
         } catch (error) {
-          message.error((error as Error).message);
+          message.error(getErrorMessage(error));
           throw error;
         }
       },
@@ -244,50 +250,56 @@ export default function LogsPage(): React.ReactElement {
                   }}
                 />
               </Tooltip>
-              {record.status === "failed" ? (
-                <Tooltip title="重试任务">
-                  <Button
-                    size="small"
-                    icon={<ReloadOutlined />}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void retryTask(record);
-                    }}
-                  />
-                </Tooltip>
-              ) : null}
-              {cancellable ? (
-                <Tooltip title="取消任务">
-                  <Button
-                    danger
-                    size="small"
-                    icon={<StopOutlined />}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void cancel(record.id).then(() => message.success("任务已取消"));
-                    }}
-                  />
-                </Tooltip>
-              ) : null}
-              {removable ? (
-                <Tooltip title="移除记录">
-                  <Button
-                    danger
-                    size="small"
-                    icon={<DeleteOutlined />}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      removeTask(record);
-                    }}
-                  />
-                </Tooltip>
-              ) : null}
+              {record.status === "failed"
+                ? (
+                    <Tooltip title="重试任务">
+                      <Button
+                        size="small"
+                        icon={<ReloadOutlined />}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleRetryTask(record);
+                        }}
+                      />
+                    </Tooltip>
+                  )
+                : null}
+              {cancellable
+                ? (
+                    <Tooltip title="取消任务">
+                      <Button
+                        danger
+                        size="small"
+                        icon={<StopOutlined />}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void cancel(record.id).then(() => message.success("任务已取消"));
+                        }}
+                      />
+                    </Tooltip>
+                  )
+                : null}
+              {removable
+                ? (
+                    <Tooltip title="移除记录">
+                      <Button
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleRemoveTask(record);
+                        }}
+                      />
+                    </Tooltip>
+                  )
+                : null}
             </Space>
           );
         },
       },
     ],
-    [cancel, message, removeTask, retryTask],
+    [cancel, message, handleRemoveTask, handleRetryTask],
   );
 
   return (
@@ -326,7 +338,7 @@ export default function LogsPage(): React.ReactElement {
           </div>
           <Space>
             <Badge count={historyTasks.length} />
-            <Button danger icon={<DeleteOutlined />} disabled={historyTasks.length === 0} onClick={clearHistory}>
+            <Button danger icon={<DeleteOutlined />} disabled={historyTasks.length === 0} onClick={handleClearHistory}>
               清理历史
             </Button>
           </Space>
@@ -342,35 +354,38 @@ export default function LogsPage(): React.ReactElement {
       </section>
 
       <Modal
+        className="task-log-modal"
         title={logTask?.title ?? "安装日志"}
         open={Boolean(logTask)}
         width={860}
         footer={null}
         onCancel={() => setLogTaskId(undefined)}
       >
-        {logTask ? (
-          <div className="task-detail-stack">
-            <DownloadSummary download={logTask.download} />
-            <List
-              dataSource={logTask.logs}
-              pagination={logTask.logs.length > logPageSize ? logListPagination : false}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" /> }}
-              renderItem={(entry) => (
-                <List.Item>
-                  <Space>
-                    <Tag color={entry.level === "error" ? "red" : entry.level === "warn" ? "orange" : "blue"}>
-                      {entry.level}
-                    </Tag>
-                    <Typography.Text type="secondary">{new Date(entry.at).toLocaleString()}</Typography.Text>
-                    <Typography.Text>{entry.message}</Typography.Text>
-                  </Space>
-                </List.Item>
-              )}
-            />
-          </div>
-        ) : (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" />
-        )}
+        {logTask
+          ? (
+              <div className="task-detail-stack">
+                <DownloadSummary download={logTask.download} />
+                <List
+                  dataSource={logTask.logs}
+                  pagination={logTask.logs.length > logPageSize ? logListPagination : false}
+                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" /> }}
+                  renderItem={(entry) => (
+                    <List.Item>
+                      <Space>
+                        <Tag color={entry.level === "error" ? "red" : entry.level === "warn" ? "orange" : "blue"}>
+                          {entry.level}
+                        </Tag>
+                        <Typography.Text type="secondary">{new Date(entry.at).toLocaleString()}</Typography.Text>
+                        <Typography.Text>{entry.message}</Typography.Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            )
+          : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" />
+            )}
       </Modal>
     </div>
   );

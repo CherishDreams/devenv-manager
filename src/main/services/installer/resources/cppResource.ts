@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import type { PackageResource } from "../types";
+import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 
 export function resolveCppResource(input: InstallTaskInput, config: AppConfig): PackageResource {
   const vendor = input.vendor ?? "llvm-mingw";

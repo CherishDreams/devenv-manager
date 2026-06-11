@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import type { PackageResource } from "../types";
+import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 
 export function resolveDotnetResource(input: InstallTaskInput, config: AppConfig): PackageResource {
   if ((input.vendor ?? "microsoft") !== "microsoft") {
@@ -9,8 +9,8 @@ export function resolveDotnetResource(input: InstallTaskInput, config: AppConfig
 
   const fileName = `dotnet-sdk-${input.version}-win-x64.zip`;
   const configuredMirror = config.mirrors.dotnet.trim();
-  const baseUrl =
-    configuredMirror && configuredMirror !== "official" ? configuredMirror.replace(/\/+$/, "") : "https://dotnetcli.azureedge.net/dotnet";
+  const baseUrl
+    = configuredMirror && configuredMirror !== "official" ? configuredMirror.replace(/\/+$/, "") : "https://dotnetcli.azureedge.net/dotnet";
 
   return {
     url: `${baseUrl}/Sdk/${input.version}/${fileName}`,

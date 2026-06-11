@@ -1,11 +1,11 @@
+import type { AppConfig, DiscoveredEnvironment, EnvironmentDefinition, EnvironmentKind, EnvironmentSummary } from "../../shared/types";
+import type { ConfigService } from "./configService";
+import type { EnvironmentRecordService } from "./environmentRecordService";
 import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { environmentDefinitions } from "../../shared/environmentDefinitions";
-import type { AppConfig, DiscoveredEnvironment, EnvironmentDefinition, EnvironmentKind, EnvironmentSummary } from "../../shared/types";
-import { ConfigService } from "./configService";
-import { EnvironmentRecordService } from "./environmentRecordService";
 
 const execFileAsync = promisify(execFile);
 const commandTimeoutMs = 8_000;
@@ -33,18 +33,12 @@ function normalizePath(value: string): string {
   return resolve(value).replace(/[\\/]+/g, "\\").replace(/\\+$/, "").toLowerCase();
 }
 
-function splitPathValue(value: string | undefined): string[] {
-  return (value ?? "")
-    .split(";")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path);
     return true;
   } catch {
+    // Path does not exist or is inaccessible
     return false;
   }
 }
@@ -107,7 +101,7 @@ function isPathInside(path: string, root: string): boolean {
 }
 
 function isWindowsAppsPath(path: string): boolean {
-  return /(^|[\\/])windowsapps([\\/]|$)/i.test(path);
+  return /(?:^|[\\/])windowsapps(?:[\\/]|$)/i.test(path);
 }
 
 function isExcludedRoot(path: string, excludedRoots: Set<string>): boolean {
@@ -167,7 +161,7 @@ function trimExecutablePath(value: string): string | undefined {
     return quotedMatch[1];
   }
 
-  return trimmed.match(/^([^\s]+\.exe)/i)?.[1];
+  return trimmed.match(/^(\S+\.exe)/i)?.[1];
 }
 
 function createProbeMap(): Map<EnvironmentKind, Probe> {
@@ -216,7 +210,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["go.exe"],
         verify: (rootPath) => ({ command: join(rootPath, "bin", "go.exe"), args: ["version"] }),
         rootFromExecutable: parentOfBin,
-        parseVersion: (output) => output.match(/go version go([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/go version go(\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -246,7 +240,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["mvn.cmd", "mvn.bat"],
         verify: (rootPath) => ({ command: join(rootPath, "bin", "mvn.cmd"), args: ["-version"] }),
         rootFromExecutable: parentOfBin,
-        parseVersion: (output) => output.match(/Apache Maven ([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/Apache Maven (\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -256,7 +250,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["gradle.bat", "gradle.exe"],
         verify: (rootPath) => ({ command: join(rootPath, "bin", "gradle.bat"), args: ["--version"] }),
         rootFromExecutable: parentOfBin,
-        parseVersion: (output) => output.match(/Gradle\s+([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/Gradle\s+(\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -266,7 +260,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["cmake.exe"],
         verify: (rootPath) => ({ command: join(rootPath, "bin", "cmake.exe"), args: ["--version"] }),
         rootFromExecutable: parentOfBin,
-        parseVersion: (output) => output.match(/cmake version\s+([^\s]+)/i)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/cmake version\s+(\S+)/i)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -286,7 +280,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["clang++.exe", "g++.exe"],
         verify: (rootPath) => ({ command: join(rootPath, "bin", "clang++.exe"), args: ["--version"] }),
         rootFromExecutable: parentOfBin,
-        parseVersion: (output) => output.match(/clang version ([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/clang version (\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -296,7 +290,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["rustc.exe", "cargo.exe"],
         verify: (rootPath) => ({ command: join(rootPath, "cargo", "bin", "rustc.exe"), args: ["--version"] }),
         rootFromExecutable: rustRoot,
-        parseVersion: (output) => output.match(/rustc\s+([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/rustc\s+(\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -316,7 +310,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["php.exe"],
         verify: (rootPath) => ({ command: join(rootPath, "php.exe"), args: ["-v"] }),
         rootFromExecutable: executableDir,
-        parseVersion: (output) => output.match(/PHP\s+([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/PHP\s+(\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -326,7 +320,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["ruby.exe"],
         verify: (rootPath) => ({ command: join(rootPath, "bin", "ruby.exe"), args: ["-v"] }),
         rootFromExecutable: parentOfBin,
-        parseVersion: (output) => output.match(/ruby\s+([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/ruby\s+(\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -336,7 +330,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["flutter.bat"],
         verify: (rootPath) => ({ command: join(rootPath, "bin", "flutter.bat"), args: ["--version"] }),
         rootFromExecutable: parentOfBin,
-        parseVersion: (output) => output.match(/Flutter\s+([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/Flutter\s+(\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -389,7 +383,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["mongod.exe", "mongo.exe", "mongosh.exe"],
         verify: (rootPath) => ({ command: join(rootPath, "bin", "mongod.exe"), args: ["--version"] }),
         rootFromExecutable: parentOfBin,
-        parseVersion: (output) => output.match(/db version v?([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/db version v?(\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -399,7 +393,7 @@ function createProbeMap(): Map<EnvironmentKind, Probe> {
         commands: ["redis-server.exe", "redis-cli.exe"],
         verify: (rootPath) => ({ command: join(rootPath, "redis-server.exe"), args: ["--version"] }),
         rootFromExecutable: executableDir,
-        parseVersion: (output) => output.match(/v=([^\s]+)/)?.[1] ?? firstVersion(output),
+        parseVersion: (output) => output.match(/v=(\S+)/)?.[1] ?? firstVersion(output),
       },
     ],
     [
@@ -423,6 +417,7 @@ async function findExecutables(command: string): Promise<string[]> {
       .map((line) => line.trim())
       .filter((line) => line.toLowerCase().endsWith(command.toLowerCase()));
   } catch {
+    // Command failed, no services to report
     return [];
   }
 }
@@ -549,10 +544,10 @@ export class EnvironmentDiscoveryService {
     const key = `${probe.environment}:${normalizedPath}`;
 
     if (
-      discovered.has(key) ||
-      isWindowsAppsPath(installPath) ||
-      isExcludedRoot(installPath, context.excludedRoots) ||
-      !(await pathExists(installPath))
+      discovered.has(key)
+      || isWindowsAppsPath(installPath)
+      || isExcludedRoot(installPath, context.excludedRoots)
+      || !(await pathExists(installPath))
     ) {
       return;
     }
@@ -569,6 +564,7 @@ export class EnvironmentDiscoveryService {
     try {
       version = probe.parseVersion(await runProcess(verification.command, verification.args)) ?? version;
     } catch {
+      // Verification command failed, skip this environment
       return;
     }
 

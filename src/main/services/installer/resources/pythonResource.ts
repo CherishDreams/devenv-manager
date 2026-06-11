@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { getMirrorSourceName, isOfficialMirrorValue } from "../../../../shared/mirrorPresets";
 import type { PackageResource } from "../types";
+import { getMirrorSourceName, isOfficialMirrorValue } from "../../../../shared/mirrorPresets";
 
 export function resolvePythonResource(input: InstallTaskInput, config: AppConfig): PackageResource {
   const vendor = input.vendor ?? "cpython";

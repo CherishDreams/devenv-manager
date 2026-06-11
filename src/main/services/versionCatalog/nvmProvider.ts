@@ -1,5 +1,6 @@
 import type { AppConfig, AvailableVersion } from "../../../shared/types";
-import { createVersion, fetchJson, getStaticVersionsWithMirrorNote, type GitHubRelease, maxVersionOptions } from "./utils";
+import type { GitHubRelease } from "./utils";
+import { createVersion, fetchJson, getStaticVersionsWithMirrorNote, maxVersionOptions } from "./utils";
 
 export async function listNvmVersions(config: AppConfig): Promise<AvailableVersion[]> {
   if (config.mirrors.nvm.trim() && config.mirrors.nvm.trim() !== "official") {

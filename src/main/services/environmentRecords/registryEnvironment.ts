@@ -1,8 +1,8 @@
-import { app } from "electron";
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { app } from "electron";
 
 export interface EnvironmentApplyPlan {
   envVars: Record<string, string>;
@@ -59,6 +59,7 @@ function runProcess(command: string, args: string[], timeoutMs = 30_000): Promis
     let settled = false;
     let stdout = "";
     let stderr = "";
+    let timeout: ReturnType<typeof setTimeout>;
     const settle = (callback: () => void): void => {
       if (settled) {
         return;
@@ -68,7 +69,7 @@ function runProcess(command: string, args: string[], timeoutMs = 30_000): Promis
       clearTimeout(timeout);
       callback();
     };
-    const timeout = setTimeout(() => {
+    timeout = setTimeout(() => {
       child.kill();
       settle(() => reject(new Error(`${basename(command)} 执行超时。`)));
     }, timeoutMs);
@@ -94,7 +95,7 @@ function runProcess(command: string, args: string[], timeoutMs = 30_000): Promis
 }
 
 function decodeRegistryExport(buffer: Buffer): string {
-  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+  if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) {
     return buffer.subarray(2).toString("utf16le");
   }
 
@@ -160,28 +161,19 @@ function parseRegistryExportValue(content: string, name: string): string | undef
   return undefined;
 }
 
-async function readMachineEnvironmentValue(name: string): Promise<string | undefined> {
+async function readMachineEnvironmentValues(names: string[]): Promise<Record<string, string | undefined>> {
   const tempDir = await mkdtemp(join(tmpdir(), "env-manager-reg-"));
   const exportFile = join(tempDir, "environment.reg");
 
   try {
     await runProcess("reg.exe", ["export", machineEnvironmentRegistryKey, exportFile, "/y"], 15_000);
-    return parseRegistryExportValue(decodeRegistryExport(await readFile(exportFile)), name);
+    const content = decodeRegistryExport(await readFile(exportFile));
+    return Object.fromEntries(names.map((name) => [name, parseRegistryExportValue(content, name)]));
   } catch {
-    return undefined;
+    return Object.fromEntries(names.map((name) => [name, undefined]));
   } finally {
     await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
-}
-
-async function readRequiredMachineEnvironmentValue(name: string): Promise<string> {
-  const value = await readMachineEnvironmentValue(name);
-
-  if (typeof value !== "string") {
-    throw new Error(`读取系统环境变量 ${name} 失败，已取消写入。`);
-  }
-
-  return value;
 }
 
 async function writeMachineEnvironmentValue(name: string, value: string, type: "REG_SZ" | "REG_EXPAND_SZ"): Promise<void> {
@@ -200,24 +192,38 @@ async function backupMachineEnvironmentRegistry(): Promise<void> {
 }
 
 export async function registryNeedsUpdate(plan: EnvironmentApplyPlan): Promise<boolean> {
+  const currentValues = await readMachineEnvironmentValues([...Object.keys(plan.envVars), "Path"]);
+
   for (const [name, value] of Object.entries(plan.envVars)) {
-    if ((await readMachineEnvironmentValue(name)) !== value) {
+    if (currentValues[name] !== value) {
       return true;
     }
   }
 
-  const currentPath = await readRequiredMachineEnvironmentValue("Path");
+  const currentPath = currentValues.Path;
+
+  if (typeof currentPath !== "string") {
+    throw new TypeError("读取系统环境变量 Path 失败，已取消写入。");
+  }
+
   return updatePathValue(currentPath, plan.removePathEntries, plan.addPathEntries) !== currentPath;
 }
 
 export async function registryNeedsCleanup(plan: EnvironmentCleanupPlan): Promise<boolean> {
+  const currentValues = await readMachineEnvironmentValues([...Object.keys(plan.envVars), "Path"]);
+
   for (const [name, value] of Object.entries(plan.envVars)) {
-    if ((await readMachineEnvironmentValue(name)) === value) {
+    if (currentValues[name] === value) {
       return true;
     }
   }
 
-  const currentPath = await readRequiredMachineEnvironmentValue("Path");
+  const currentPath = currentValues.Path;
+
+  if (typeof currentPath !== "string") {
+    throw new TypeError("读取系统环境变量 Path 失败，已取消写入。");
+  }
+
   return updatePathValue(currentPath, plan.removePathEntries, []) !== currentPath;
 }
 
@@ -241,16 +247,45 @@ function cleanupProcessEnvironment(envVars: Record<string, string>, pathValue: s
   process.env[pathKey] = pathValue;
 }
 
+export async function synchronizeProcessEnvironment(names: string[]): Promise<void> {
+  const currentValues = await readMachineEnvironmentValues([...names, "Path"]);
+
+  for (const name of names) {
+    const value = currentValues[name];
+
+    if (typeof value === "string") {
+      process.env[name] = value;
+    } else {
+      delete process.env[name];
+    }
+  }
+
+  const pathValue = currentValues.Path;
+
+  if (typeof pathValue !== "string") {
+    throw new TypeError("读取系统环境变量 Path 失败，无法同步当前进程环境。");
+  }
+
+  const pathKey = process.env.Path === undefined && process.env.PATH !== undefined ? "PATH" : "Path";
+  process.env[pathKey] = pathValue;
+}
+
 export async function applyRegistryPlan(plan: EnvironmentApplyPlan): Promise<void> {
   const valuesToWrite: Array<{ name: string; value: string; type: "REG_SZ" | "REG_EXPAND_SZ" }> = [];
+  const currentValues = await readMachineEnvironmentValues([...Object.keys(plan.envVars), "Path"]);
 
   for (const [name, value] of Object.entries(plan.envVars)) {
-    if ((await readMachineEnvironmentValue(name)) !== value) {
+    if (currentValues[name] !== value) {
       valuesToWrite.push({ name, value, type: "REG_SZ" });
     }
   }
 
-  const currentPath = await readRequiredMachineEnvironmentValue("Path");
+  const currentPath = currentValues.Path;
+
+  if (typeof currentPath !== "string") {
+    throw new TypeError("读取系统环境变量 Path 失败，已取消写入。");
+  }
+
   const nextPath = updatePathValue(currentPath, plan.removePathEntries, plan.addPathEntries);
 
   if (nextPath !== currentPath) {
@@ -270,14 +305,20 @@ export async function applyRegistryPlan(plan: EnvironmentApplyPlan): Promise<voi
 
 export async function cleanupRegistryPlan(plan: EnvironmentCleanupPlan): Promise<void> {
   const namesToDelete: string[] = [];
+  const currentValues = await readMachineEnvironmentValues([...Object.keys(plan.envVars), "Path"]);
 
   for (const [name, value] of Object.entries(plan.envVars)) {
-    if ((await readMachineEnvironmentValue(name)) === value) {
+    if (currentValues[name] === value) {
       namesToDelete.push(name);
     }
   }
 
-  const currentPath = await readRequiredMachineEnvironmentValue("Path");
+  const currentPath = currentValues.Path;
+
+  if (typeof currentPath !== "string") {
+    throw new TypeError("读取系统环境变量 Path 失败，已取消写入。");
+  }
+
   const nextPath = updatePathValue(currentPath, plan.removePathEntries, []);
   const shouldWritePath = nextPath !== currentPath;
 

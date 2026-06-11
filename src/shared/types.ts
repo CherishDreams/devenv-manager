@@ -1,27 +1,27 @@
-export type EnvironmentKind =
-  | "java"
-  | "python"
-  | "conda"
-  | "go"
-  | "node"
-  | "nvm"
-  | "maven"
-  | "gradle"
-  | "cmake"
-  | "ninja"
-  | "cpp"
-  | "lua"
-  | "rust"
-  | "dotnet"
-  | "php"
-  | "ruby"
-  | "flutter"
-  | "android"
-  | "mysql"
-  | "postgresql"
-  | "mongodb"
-  | "redis"
-  | "sqlite";
+export type EnvironmentKind
+  = | "java"
+    | "python"
+    | "conda"
+    | "go"
+    | "node"
+    | "nvm"
+    | "maven"
+    | "gradle"
+    | "cmake"
+    | "ninja"
+    | "cpp"
+    | "lua"
+    | "rust"
+    | "dotnet"
+    | "php"
+    | "ruby"
+    | "flutter"
+    | "android"
+    | "mysql"
+    | "postgresql"
+    | "mongodb"
+    | "redis"
+    | "sqlite";
 
 export type InstallScope = "global" | "custom";
 
@@ -34,6 +34,12 @@ export type EnvironmentOwnership = "managed" | "adopted" | "external";
 export type UninstallPolicy = "delete-directory" | "remove-record-only" | "manual";
 
 export type NavigationLayout = "sidebar" | "rail";
+
+export type InstallType = "archive" | "installer";
+
+export type VersionChannel = "lts" | "stable" | "current";
+
+export type EnvironmentGroup = "编程语言" | "Python" | "JavaScript" | "构建工具" | "移动开发" | "数据库";
 
 export interface EnvironmentManagementSettings {
   mode: EnvironmentManagementMode;
@@ -52,13 +58,13 @@ export interface VendorOption {
 export interface EnvironmentDefinition {
   id: EnvironmentKind;
   name: string;
-  group: string;
+  group: EnvironmentGroup;
   description: string;
   logoId: EnvironmentKind;
   accentColor: string;
   envVars: string[];
   pathEntries: string[];
-  installType: "archive" | "installer";
+  installType: InstallType;
   vendors: VendorOption[];
 }
 
@@ -73,8 +79,8 @@ export interface AvailableVersion {
   vendor: string;
   version: string;
   label: string;
-  channel: "lts" | "stable" | "current";
-  packageType: "archive" | "installer";
+  channel: VersionChannel;
+  packageType: InstallType;
   architecture: "x64";
   notes?: string;
 }
@@ -172,6 +178,37 @@ export interface InstallTaskInput {
   scope: InstallScope;
   installPath?: string;
   configureSystemEnv: boolean;
+  databaseConfig?: DatabaseInstallConfig;
+}
+
+export type PrivilegeCheckInput
+  = | { type: "set-active"; environment: EnvironmentKind; id: string }
+    | { type: "uninstall"; id: string }
+    | { type: "install"; input: InstallTaskInput }
+    | { type: "retry"; id: string };
+
+export interface PrivilegeRequirement {
+  required: boolean;
+  authorized: boolean;
+  reason: string;
+  canSwitchToSymlink: boolean;
+  currentMode: EnvironmentManagementMode;
+  authorizationMode: "none" | "elevated-helper" | "restart-app";
+}
+
+export type DatabaseEnvironmentKind = Extract<EnvironmentKind, "mysql" | "postgresql" | "mongodb" | "redis" | "sqlite">;
+
+export type ConfigurableDatabaseEnvironmentKind = Exclude<DatabaseEnvironmentKind, "sqlite">;
+
+export interface DatabaseInstallConfig {
+  enabled: boolean;
+  installAsService: boolean;
+  startService: boolean;
+  serviceName: string;
+  port: number;
+  bindAddress: string;
+  charset: string;
+  collation?: string;
 }
 
 export interface DiscoveredEnvironment {

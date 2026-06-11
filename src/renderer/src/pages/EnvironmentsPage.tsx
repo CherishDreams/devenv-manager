@@ -1,1 +1,1 @@
-export { default } from "./environments/EnvironmentInstallPage";
+export { default as EnvironmentInstallPage } from "./environments/EnvironmentInstallPage";

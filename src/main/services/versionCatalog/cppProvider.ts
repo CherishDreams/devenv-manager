@@ -1,5 +1,6 @@
 import type { AppConfig, AvailableVersion } from "../../../shared/types";
-import { createVersion, fetchJson, getStaticVersionsWithMirrorNote, type GitHubRelease, maxVersionOptions } from "./utils";
+import type { GitHubRelease } from "./utils";
+import { createVersion, fetchJson, getStaticVersionsWithMirrorNote, maxVersionOptions } from "./utils";
 
 function isLlvmMingwAsset(name: string): boolean {
   return /^llvm-mingw-\d+-ucrt-x86_64\.zip$/i.test(name);

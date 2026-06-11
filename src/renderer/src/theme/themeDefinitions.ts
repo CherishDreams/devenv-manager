@@ -13,8 +13,8 @@ interface ThemeDefinition {
   };
 }
 
-const appFontFamily =
-  "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const appFontFamily
+  = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 export const defaultThemeStyle: ThemeStyle = "default";
 

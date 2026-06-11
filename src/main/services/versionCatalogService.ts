@@ -1,5 +1,6 @@
 import type { AppConfig, AvailableVersion, VersionCatalogQuery } from "../../shared/types";
-import { ConfigService } from "./configService";
+import type { ConfigService } from "./configService";
+import { getErrorMessage } from "../../shared/errorUtils";
 import { listAndroidVersions } from "./versionCatalog/androidProvider";
 import { listCMakeVersions } from "./versionCatalog/cmakeProvider";
 import { listCondaVersions } from "./versionCatalog/condaProvider";
@@ -42,7 +43,7 @@ export class VersionCatalogService {
 
       return fallbackVersions.map((version) => ({
         ...version,
-        notes: `在线获取失败，已使用内置目录：${(error as Error).message}`,
+        notes: `在线获取失败，已使用内置目录：${getErrorMessage(error)}`,
       }));
     }
   }
@@ -95,6 +96,10 @@ export class VersionCatalogService {
         return query.vendor === "redis-windows" ? listRedisVersions(config) : Promise.resolve(getStaticVersions(query));
       case "sqlite":
         return query.vendor === "sqlite" ? listSqliteVersions(config) : Promise.resolve(getStaticVersions(query));
+      default: {
+        const unhandled: never = query.environment;
+        throw new Error(`不支持的环境类型：${String(unhandled)}`);
+      }
     }
   }
 }

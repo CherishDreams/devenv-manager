@@ -1,6 +1,7 @@
+import type { AvailableVersion, EnvironmentKind, VersionCatalogQuery } from "@shared/types";
+import { getErrorMessage } from "@shared/errorUtils";
 import { create } from "zustand";
 import { envManagerApi } from "../api/envManagerApi";
-import type { AvailableVersion, EnvironmentKind, VersionCatalogQuery } from "@shared/types";
 
 interface CatalogState {
   versionsByKey: Record<string, AvailableVersion[]>;
@@ -51,6 +52,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       }));
       return versions;
     } catch (error) {
+      console.error("[catalogStore] Failed to load versions:", error);
       set((state) => ({
         loadingByKey: {
           ...state.loadingByKey,
@@ -58,7 +60,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         },
         errorByKey: {
           ...state.errorByKey,
-          [key]: (error as Error).message,
+          [key]: `获取版本列表失败: ${getErrorMessage(error)}`,
         },
       }));
       throw error;

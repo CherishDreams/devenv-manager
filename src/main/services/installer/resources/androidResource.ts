@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import type { PackageResource } from "../types";
+import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 
 export function resolveAndroidResource(input: InstallTaskInput, config: AppConfig): PackageResource {
   if ((input.vendor ?? "google") !== "google") {
@@ -9,8 +9,8 @@ export function resolveAndroidResource(input: InstallTaskInput, config: AppConfi
 
   const fileName = `commandlinetools-win-${input.version}_latest.zip`;
   const configuredMirror = config.mirrors.android.trim();
-  const baseUrl =
-    configuredMirror && configuredMirror !== "official"
+  const baseUrl
+    = configuredMirror && configuredMirror !== "official"
       ? configuredMirror.replace(/\/+$/, "")
       : "https://dl.google.com/android/repository";
 

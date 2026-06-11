@@ -1,7 +1,7 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
+import type { PackageResource } from "../types";
 import { getMirrorSourceName, isOfficialMirrorValue } from "../../../../shared/mirrorPresets";
 import { fetchJsonFromSources } from "../network";
-import type { PackageResource } from "../types";
 
 interface GoRelease {
   version: string;

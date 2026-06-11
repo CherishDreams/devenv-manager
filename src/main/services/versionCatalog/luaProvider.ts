@@ -1,10 +1,11 @@
 import type { AppConfig, AvailableVersion } from "../../../shared/types";
+import type { GitHubRelease } from "./utils";
 import {
   compareVersionsDesc,
   createVersion,
   fetchJson,
   getStaticVersionsWithMirrorNote,
-  type GitHubRelease,
+
   maxVersionOptions,
   unique,
 } from "./utils";

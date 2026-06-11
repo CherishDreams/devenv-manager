@@ -1,7 +1,7 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
+import type { PackageResource } from "../types";
 import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import { fetchText } from "../network";
-import type { PackageResource } from "../types";
 
 export async function resolveMavenResource(
   input: InstallTaskInput,
@@ -9,8 +9,8 @@ export async function resolveMavenResource(
   signal: AbortSignal,
 ): Promise<PackageResource> {
   const configuredMirror = config.mirrors.maven.trim();
-  const repositoryBaseUrl =
-    configuredMirror && configuredMirror !== "official"
+  const repositoryBaseUrl
+    = configuredMirror && configuredMirror !== "official"
       ? configuredMirror.replace(/\/+$/, "")
       : "https://repo.maven.apache.org/maven2";
   const metadata = await fetchText(

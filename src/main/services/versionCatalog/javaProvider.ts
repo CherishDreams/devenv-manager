@@ -1,4 +1,4 @@
-import type { AppConfig, AvailableVersion, VersionCatalogQuery } from "../../../shared/types";
+import type { AppConfig, AvailableVersion, VersionCatalogQuery, VersionChannel } from "../../../shared/types";
 import { createVersion, fetchJson, fetchText, getStaticVersions, maxVersionOptions, unique } from "./utils";
 
 interface AdoptiumAvailableReleases {
@@ -41,6 +41,22 @@ export function listJavaVersions(query: VersionCatalogQuery, config: AppConfig):
   }
 }
 
+function classifyTemurinChannel(major: number, mostRecentFeature: number, ltsReleases: Set<number>): VersionChannel {
+  if (major === mostRecentFeature)
+    return "current";
+  if (ltsReleases.has(major))
+    return "lts";
+  return "stable";
+}
+
+function classifyStandardChannel(major: number, index: number, ltsMajors: number[]): VersionChannel {
+  if (ltsMajors.includes(major))
+    return "lts";
+  if (index === 0)
+    return "current";
+  return "stable";
+}
+
 async function listTemurinVersions(config: AppConfig): Promise<AvailableVersion[]> {
   const releases = await fetchJson<AdoptiumAvailableReleases>(
     "https://api.adoptium.net/v3/info/available_releases",
@@ -55,7 +71,7 @@ async function listTemurinVersions(config: AppConfig): Promise<AvailableVersion[
       "temurin",
       String(major),
       `JDK ${major}${ltsReleases.has(major) ? " LTS" : ""}`,
-      major === releases.most_recent_feature_release ? "current" : ltsReleases.has(major) ? "lts" : "stable",
+      classifyTemurinChannel(major, releases.most_recent_feature_release, ltsReleases),
       "archive",
       "来自 Adoptium 在线版本接口",
     ),
@@ -86,7 +102,7 @@ async function listZuluVersions(config: AppConfig): Promise<AvailableVersion[]> 
         "zulu",
         String(major),
         `Zulu JDK ${major}`,
-        [21, 17, 11, 8].includes(major) ? "lts" : index === 0 ? "current" : "stable",
+        classifyStandardChannel(major, index, [21, 17, 11, 8]),
         "archive",
         `最新补丁版本 ${item.java_version.join(".")}，来自 Azul Metadata API`,
       ),
@@ -119,7 +135,7 @@ async function listLibericaVersions(config: AppConfig): Promise<AvailableVersion
         "liberica",
         String(release.featureVersion),
         `Liberica JDK ${release.featureVersion}`,
-        release.LTS ? "lts" : index === 0 ? "current" : "stable",
+        classifyStandardChannel(release.featureVersion, index, [21, 17, 11, 8]),
         "archive",
         `最新补丁版本 ${release.version}，来自 BellSoft Product Discovery API`,
       ),
@@ -143,7 +159,7 @@ async function listOracleVersions(config: AppConfig): Promise<AvailableVersion[]
       "oracle",
       String(major),
       `Oracle JDK ${major}`,
-      [21, 17, 11, 8].includes(major) ? "lts" : index === 0 ? "current" : "stable",
+      classifyStandardChannel(major, index, [21, 17, 11, 8]),
       "archive",
       "来自 Oracle Java 下载页",
     ),

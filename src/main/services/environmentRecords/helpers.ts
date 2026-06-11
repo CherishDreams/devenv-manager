@@ -1,6 +1,3 @@
-import { stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { environmentDefinitions } from "../../../shared/environmentDefinitions";
 import type {
   ActiveEnvironmentMap,
   AppConfig,
@@ -10,6 +7,9 @@ import type {
   InstallRecord,
   UninstallPolicy,
 } from "../../../shared/types";
+import { stat } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { environmentDefinitions } from "../../../shared/environmentDefinitions";
 
 export interface EnvironmentData {
   installations: InstallRecord[];

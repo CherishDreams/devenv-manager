@@ -1,3 +1,6 @@
+import type { AppConfig, NavigationLayout } from "@shared/types";
+import type React from "react";
+import type { ThemeStyle } from "../theme/themeDefinitions";
 import {
   CloudDownloadOutlined,
   FolderOpenOutlined,
@@ -5,17 +8,15 @@ import {
   SaveOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { App as AntdApp, Button, Form, Input, Radio, Select, Space, Switch, Tag, Typography } from "antd";
-import type React from "react";
-import { useEffect, useMemo, useState } from "react";
 import { environmentDefinitions } from "@shared/environmentDefinitions";
 import { createOfficialMirrorSettings, getConfiguredMirrorEntries } from "@shared/mirrorPresets";
-import type { AppConfig, NavigationLayout } from "@shared/types";
+import { App as AntdApp, Button, Form, Input, Radio, Select, Space, Switch, Tag, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
 import { envManagerApi } from "../api/envManagerApi";
 import { useCatalogStore } from "../stores/catalogStore";
 import { useConfigStore } from "../stores/configStore";
 import { useUiStore } from "../stores/uiStore";
-import { themeOptions, type ThemeStyle } from "../theme/themeDefinitions";
+import { themeOptions } from "../theme/themeDefinitions";
 
 type ConfigFormValues = Partial<AppConfig>;
 type SettingsTabKey = "general" | "network" | "data" | "about";
@@ -106,7 +107,7 @@ export default function SettingsPage(): React.ReactElement {
 
   const save = async (): Promise<void> => {
     await form.validateFields();
-    await update(form.getFieldsValue(true));
+    await update(form.getFieldsValue(true) as Partial<AppConfig>);
     message.success("设置已保存");
   };
 
@@ -145,31 +146,31 @@ export default function SettingsPage(): React.ReactElement {
       <SettingsRow
         title="显示语言"
         description="选择界面的显示语言"
-        control={
+        control={(
           <Select
             value="zh-CN"
             disabled
             options={[{ value: "zh-CN", label: "简体中文" }]}
             className="settings-control"
           />
-        }
+        )}
       />
       <SettingsRow
         title="应用主题"
         description="切换默认或液态玻璃效果"
-        control={
+        control={(
           <Select
             value={themeStyle}
             onChange={(value: ThemeStyle) => setThemeStyle(value)}
             options={themeOptions}
             className="settings-control"
           />
-        }
+        )}
       />
       <SettingsRow
         title="侧边栏布局"
         description="切换经典侧栏或图标浮栏"
-        control={
+        control={(
           <Select
             value={navigationLayout}
             loading={loading}
@@ -180,7 +181,7 @@ export default function SettingsPage(): React.ReactElement {
             ]}
             className="settings-control"
           />
-        }
+        )}
       />
       <SettingsRow
         title="界面缩放"
@@ -204,34 +205,34 @@ export default function SettingsPage(): React.ReactElement {
       <SettingsRow
         title="启用代理"
         description="安装器下载资源时使用代理"
-        control={
+        control={(
           <Form.Item name={["proxy", "enabled"]} valuePropName="checked" noStyle>
             <Switch />
           </Form.Item>
-        }
+        )}
       />
       <SettingsRow
         title="HTTP_PROXY"
         description="HTTP 下载请求使用的代理地址"
-        control={
+        control={(
           <Form.Item name={["proxy", "httpProxy"]} noStyle>
             <Input placeholder="http://127.0.0.1:7890" className="settings-control" />
           </Form.Item>
-        }
+        )}
       />
       <SettingsRow
         title="HTTPS_PROXY"
         description="HTTPS 下载请求使用的代理地址"
-        control={
+        control={(
           <Form.Item name={["proxy", "httpsProxy"]} noStyle>
             <Input placeholder="http://127.0.0.1:7890" className="settings-control" />
           </Form.Item>
-        }
+        )}
       />
       <SettingsRow
         title="镜像源摘要"
         description={`当前 ${configuredMirrors.length} 个环境启用了非官方镜像源`}
-        control={
+        control={(
           <Space wrap>
             <Button icon={<CloudDownloadOutlined />} onClick={openEnvironmentMirrors}>
               前往配置
@@ -240,17 +241,21 @@ export default function SettingsPage(): React.ReactElement {
               全部重置
             </Button>
           </Space>
-        }
+        )}
       />
-      {configuredMirrors.length > 0 ? (
-        <div className="settings-mirror-strip">
-          {configuredMirrors.map((entry) => (
-            <Tag key={entry.environment} color="blue">
-              {entry.definition?.name ?? entry.environment}: {entry.displayName}
-            </Tag>
-          ))}
-        </div>
-      ) : null}
+      {configuredMirrors.length > 0
+        ? (
+            <div className="settings-mirror-strip">
+              {configuredMirrors.map((entry) => (
+                <Tag key={entry.environment} color="blue">
+                  {entry.definition?.name ?? entry.environment}
+                  :
+                  {entry.displayName}
+                </Tag>
+              ))}
+            </div>
+          )
+        : null}
     </div>
   );
 
@@ -259,41 +264,41 @@ export default function SettingsPage(): React.ReactElement {
       <SettingsRow
         title="全局安装目录"
         description="未手动选择路径时默认安装到这里"
-        control={
+        control={(
           <Form.Item name="globalInstallDir" rules={[{ required: true, message: "请选择目录" }]} noStyle>
             <DirectoryInput onPick={() => void selectDirectory("globalInstallDir")} />
           </Form.Item>
-        }
+        )}
       />
       <SettingsRow
         title="下载缓存目录"
         description="下载的安装包和临时文件缓存位置"
-        control={
+        control={(
           <Form.Item name="downloadCacheDir" rules={[{ required: true, message: "请选择目录" }]} noStyle>
             <DirectoryInput onPick={() => void selectDirectory("downloadCacheDir")} />
           </Form.Item>
-        }
+        )}
       />
       <SettingsRow
         title="保留安装包"
         description="安装完成后保留下载文件，便于复用"
-        control={
+        control={(
           <Form.Item name="retainDownloads" valuePropName="checked" noStyle>
             <Switch />
           </Form.Item>
-        }
+        )}
       />
       <SettingsRow
         title="版本切换方式"
         description="选择软件软链接或直接修改系统环境变量"
-        control={
+        control={(
           <Form.Item name={["environmentManagement", "mode"]} noStyle>
             <Radio.Group optionType="button" buttonStyle="solid">
               <Radio.Button value="symlink">软件软链接</Radio.Button>
               <Radio.Button value="direct">直接指向</Radio.Button>
             </Radio.Group>
           </Form.Item>
-        }
+        )}
       />
     </div>
   );
@@ -348,13 +353,15 @@ export default function SettingsPage(): React.ReactElement {
         {tabContent[activeTab]}
       </Form>
 
-      {activeTab !== "about" ? (
-        <div className="settings-actions">
-          <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={() => void save()}>
-            保存设置
-          </Button>
-        </div>
-      ) : null}
+      {activeTab !== "about"
+        ? (
+            <div className="settings-actions">
+              <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={() => void save()}>
+                保存设置
+              </Button>
+            </div>
+          )
+        : null}
     </div>
   );
 }

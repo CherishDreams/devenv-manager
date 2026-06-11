@@ -1,7 +1,9 @@
-import { fetch, ProxyAgent, type Dispatcher } from "undici";
+import type { AppConfig, AvailableVersion, EnvironmentKind, VersionCatalogQuery } from "../../../shared/types";
+import { fetch } from "undici";
+import { getErrorMessage, parseResponseJsonAs } from "../../../shared/errorUtils";
 import { appendMirrorVersionNote } from "../../../shared/mirrorPresets";
 import { versionCatalog } from "../../../shared/versionCatalog";
-import type { AppConfig, AvailableVersion, EnvironmentKind, VersionCatalogQuery } from "../../../shared/types";
+import { closeDispatcher, createProxyDispatcher } from "../common/networkUtils";
 
 const requestTimeoutMs = 20_000;
 
@@ -78,32 +80,6 @@ export function getMirrorBaseUrl(value: string, officialBaseUrl: string): string
   return mirror && mirror !== "official" ? mirror.replace(/\/+$/, "") : officialBaseUrl;
 }
 
-function getProxyUrl(url: string, config: AppConfig): string | undefined {
-  if (!config.proxy.enabled) {
-    return undefined;
-  }
-
-  const requestProtocol = new URL(url).protocol;
-  const preferredProxy = requestProtocol === "http:" ? config.proxy.httpProxy : config.proxy.httpsProxy;
-  const fallbackProxy = requestProtocol === "http:" ? config.proxy.httpsProxy : config.proxy.httpProxy;
-  const proxyUrl = (preferredProxy || fallbackProxy).trim();
-  return proxyUrl || undefined;
-}
-
-function createProxyDispatcher(url: string, config: AppConfig): Dispatcher | undefined {
-  const proxyUrl = getProxyUrl(url, config);
-
-  if (!proxyUrl) {
-    return undefined;
-  }
-
-  return new ProxyAgent(proxyUrl);
-}
-
-async function closeDispatcher(dispatcher: Dispatcher | undefined): Promise<void> {
-  await dispatcher?.close().catch(() => undefined);
-}
-
 export async function fetchText(url: string, config: AppConfig): Promise<string> {
   const dispatcher = createProxyDispatcher(url, config);
 
@@ -117,7 +93,7 @@ export async function fetchText(url: string, config: AppConfig): Promise<string>
       throw new Error(`${response.status} ${response.statusText}`);
     }
 
-    return response.text();
+    return await response.text();
   } finally {
     await closeDispatcher(dispatcher);
   }
@@ -136,7 +112,7 @@ export async function fetchJson<TData>(url: string, config: AppConfig): Promise<
       throw new Error(`${response.status} ${response.statusText}`);
     }
 
-    return (await response.json()) as TData;
+    return await parseResponseJsonAs<TData>(response, `fetchJson(${url})`);
   } finally {
     await closeDispatcher(dispatcher);
   }
@@ -155,7 +131,7 @@ export async function fetchJsonFromSources<TData>(
         source,
       };
     } catch (error) {
-      errors.push(`${source.name}: ${(error as Error).message}`);
+      errors.push(`${source.name}: ${getErrorMessage(error)}`);
     }
   }
 

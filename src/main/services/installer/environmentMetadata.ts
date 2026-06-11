@@ -1,6 +1,6 @@
+import type { AppConfig, EnvironmentDefinition, EnvironmentKind, InstallTaskInput } from "../../../shared/types";
 import { join, resolve } from "node:path";
 import { environmentDefinitions } from "../../../shared/environmentDefinitions";
-import type { AppConfig, EnvironmentDefinition, EnvironmentKind, InstallTaskInput } from "../../../shared/types";
 
 export function getDefinition(environment: EnvironmentKind): EnvironmentDefinition {
   const definition = environmentDefinitions.find((item) => item.id === environment);
@@ -94,6 +94,10 @@ export function getVerificationCommand(environment: EnvironmentKind, installPath
       return { command: join(installPath, "redis-server.exe"), args: ["--version"] };
     case "sqlite":
       return { command: join(installPath, "sqlite3.exe"), args: ["--version"] };
+    default: {
+      const unhandled: never = environment;
+      throw new Error(`不支持的环境类型：${String(unhandled)}`);
+    }
   }
 }
 

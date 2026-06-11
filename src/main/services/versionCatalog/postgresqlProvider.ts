@@ -13,7 +13,7 @@ function getPostgresqlChannel(version: string, index: number): AvailableVersion[
 
 function parsePostgresqlWindowsVersions(page: string): string[] {
   const versions = Array.from(
-    page.matchAll(/Version\s*(?:<!-- -->)?([\d.]+).*?<a href="[^"]+"><img alt="Windows x86-64"/gs),
+    page.matchAll(/Version\s*(?:<!-- -->)?([\d.]+)<a href="[^"]+"><img alt="Windows x86-64"/g),
     (match) => match[1],
   );
 

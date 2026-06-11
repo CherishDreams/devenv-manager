@@ -1,6 +1,6 @@
-import { Card, List, Space, Typography } from "antd";
-import type React from "react";
 import type { VendorOption } from "@shared/types";
+import type React from "react";
+import { Card, List, Space, Typography } from "antd";
 
 export function VendorList({
   vendors,

@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { fetchJson } from "../network";
 import type { PackageResource } from "../types";
+import { fetchJson } from "../network";
 
 interface ZuluPackage {
   download_url: string;

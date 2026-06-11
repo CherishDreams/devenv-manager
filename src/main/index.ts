@@ -1,16 +1,60 @@
-import { app, BrowserWindow, Menu } from "electron";
+import type { EnvironmentKind, InstallTaskInput } from "../shared/types";
 import { join } from "node:path";
+import { app, BrowserWindow, Menu } from "electron";
+import { getErrorMessage, parseJsonAs } from "../shared/errorUtils";
 import { registerIpc } from "./ipc/registerIpc";
 import { ConfigService } from "./services/configService";
+import {
+  shutdownElevatedBroker,
+  startElevatedBrokerServer,
+} from "./services/elevationService";
 import { EnvironmentDiscoveryService } from "./services/environmentDiscoveryService";
 import { EnvironmentRecordService } from "./services/environmentRecordService";
 import { InstallerService } from "./services/installerService";
 import { SystemStatusService } from "./services/systemStatusService";
 import { TaskService } from "./services/taskService";
 import { VersionCatalogService } from "./services/versionCatalogService";
-import type { EnvironmentKind } from "../shared/types";
 
 let mainWindow: BrowserWindow | undefined;
+
+function getElevatedBrokerOptions(): { pipePath: string; parentPid?: number } | undefined {
+  const markerIndex = process.argv.indexOf("--env-manager-elevated-broker");
+
+  if (markerIndex < 0) {
+    return undefined;
+  }
+
+  const pipePath = process.argv[markerIndex + 1];
+  const parentPid = Number.parseInt(process.argv[markerIndex + 2], 10);
+  return pipePath ? { pipePath, parentPid: Number.isNaN(parentPid) ? undefined : parentPid } : undefined;
+}
+
+function watchParentProcess(parentPid: number | undefined): void {
+  if (!parentPid) {
+    return;
+  }
+
+  const timer = setInterval(() => {
+    try {
+      process.kill(parentPid, 0);
+    } catch {
+      // Parent process gone, exit broker
+      app.exit(0);
+    }
+  }, 5_000);
+  timer.unref();
+}
+
+async function runElevatedBroker(options: { pipePath: string; parentPid?: number }): Promise<void> {
+  watchParentProcess(options.parentPid);
+  const configService = new ConfigService();
+  const environmentRecordService = new EnvironmentRecordService(configService);
+
+  await startElevatedBrokerServer(options.pipePath, (operation) =>
+    operation.type === "set-active"
+      ? environmentRecordService.setActive(operation.environment, operation.id)
+      : environmentRecordService.uninstallManaged(operation.id));
+}
 
 function getAppIconPath(): string {
   return app.isPackaged ? join(process.resourcesPath, "icon.ico") : join(process.cwd(), "build/icon.ico");
@@ -33,6 +77,22 @@ function getPendingSetActive(): { environment: EnvironmentKind; id: string } | u
   return { environment, id };
 }
 
+function getPendingInstallInput(): InstallTaskInput | undefined {
+  const markerIndex = process.argv.indexOf("--env-manager-create-install");
+  const encodedInput = markerIndex >= 0 ? process.argv[markerIndex + 1] : undefined;
+
+  if (!encodedInput) {
+    return undefined;
+  }
+
+  try {
+    return parseJsonAs<InstallTaskInput>(Buffer.from(encodedInput, "base64url").toString("utf8"), "InstallTaskInput");
+  } catch {
+    // Malformed install input from CLI, ignore
+    return undefined;
+  }
+}
+
 function runPendingSetActive(
   window: BrowserWindow,
   environmentRecordService: EnvironmentRecordService,
@@ -45,7 +105,7 @@ function runPendingSetActive(
         window.webContents.send("environments:changed", summary);
       })
       .catch((error) => {
-        window.webContents.send("environments:switch-failed", (error as Error).message);
+        window.webContents.send("environments:switch-failed", getErrorMessage(error));
       });
   });
 }
@@ -96,8 +156,8 @@ function createWindow(): void {
   if (isDev) {
     mainWindow.webContents.on("before-input-event", (_, input) => {
       const key = input.key.toLowerCase();
-      const shouldToggleDevTools =
-        input.type === "keyDown" && (key === "f12" || (input.control && input.shift && key === "i"));
+      const shouldToggleDevTools
+        = input.type === "keyDown" && (key === "f12" || (input.control && input.shift && key === "i"));
 
       if (shouldToggleDevTools) {
         mainWindow?.webContents.toggleDevTools();
@@ -115,9 +175,23 @@ function createWindow(): void {
   if (pendingSetActive) {
     runPendingSetActive(mainWindow, environmentRecordService, pendingSetActive);
   }
+
+  const pendingInstallInput = getPendingInstallInput();
+  if (pendingInstallInput) {
+    mainWindow.webContents.once("did-finish-load", () => {
+      void taskService.createInstallTask(pendingInstallInput);
+    });
+  }
 }
 
-app.whenReady().then(() => {
+const elevatedBrokerOptions = getElevatedBrokerOptions();
+
+void app.whenReady().then(() => {
+  if (elevatedBrokerOptions) {
+    void runElevatedBroker(elevatedBrokerOptions);
+    return;
+  }
+
   createWindow();
 
   app.on("activate", () => {
@@ -129,6 +203,7 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
+    void shutdownElevatedBroker();
     app.quit();
   }
 });

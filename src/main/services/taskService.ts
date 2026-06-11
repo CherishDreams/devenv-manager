@@ -1,10 +1,11 @@
-import { EventEmitter } from "node:events";
-import { app } from "electron";
-import { join } from "node:path";
 import type { InstallTaskInput, ManagedTask, TaskDownloadProgress, TaskLogEntry } from "../../shared/types";
+import type { EnvironmentRecordService } from "./environmentRecordService";
+import type { InstallerService } from "./installerService";
+import { EventEmitter } from "node:events";
+import { join } from "node:path";
+import { app } from "electron";
 import { environmentDefinitions } from "../../shared/environmentDefinitions";
-import { EnvironmentRecordService } from "./environmentRecordService";
-import { InstallerService } from "./installerService";
+import { getErrorMessage } from "../../shared/errorUtils";
 import { JsonFileStore } from "./jsonFileStore";
 
 function createLog(message: string, level: TaskLogEntry["level"] = "info"): TaskLogEntry {
@@ -57,6 +58,7 @@ function isActiveTask(task: ManagedTask): boolean {
 function cloneInstallInput(input: InstallTaskInput): InstallTaskInput {
   return {
     ...input,
+    databaseConfig: input.databaseConfig ? { ...input.databaseConfig } : undefined,
   };
 }
 
@@ -237,26 +239,26 @@ export class TaskService extends EventEmitter {
     this.tasks = data.tasks.map((task) => {
       const normalizedLogs = task.logs.map(normalizeTaskLog);
       const verificationLogIndex = getVerificationLogIndex(normalizedLogs);
-      const hasErrorAfterVerification =
-        verificationLogIndex >= 0 && normalizedLogs.slice(verificationLogIndex + 1).some((entry) => entry.level === "error");
+      const hasErrorAfterVerification
+        = verificationLogIndex >= 0 && normalizedLogs.slice(verificationLogIndex + 1).some((entry) => entry.level === "error");
       const normalizedTitle = task.title.toLowerCase();
       const hasMatchingInstallation = summary.installations.some((installation) => {
         const vendorMatches = !installation.vendor || normalizedTitle.includes(installation.vendor.toLowerCase());
         return (
-          normalizedTitle.includes(installation.environment.toLowerCase()) &&
-          normalizedTitle.includes(installation.version.toLowerCase()) &&
-          vendorMatches
+          normalizedTitle.includes(installation.environment.toLowerCase())
+          && normalizedTitle.includes(installation.version.toLowerCase())
+          && vendorMatches
         );
       });
       const interruptedAfterVerification = normalizedLogs.some((entry) =>
         entry.message.includes("任务尚未完成，已标记为中断"),
       );
-      const shouldRecoverCompleted =
-        task.status !== "succeeded" &&
-        verificationLogIndex >= 0 &&
-        !hasErrorAfterVerification &&
-        hasMatchingInstallation &&
-        (["queued", "running"].includes(task.status) || interruptedAfterVerification);
+      const shouldRecoverCompleted
+        = task.status !== "succeeded"
+          && verificationLogIndex >= 0
+          && !hasErrorAfterVerification
+          && hasMatchingInstallation
+          && (["queued", "running"].includes(task.status) || interruptedAfterVerification);
 
       if (shouldRecoverCompleted) {
         changed = true;
@@ -367,7 +369,7 @@ export class TaskService extends EventEmitter {
 
       this.updateTask(id, {
         status: "failed",
-        log: createLog((error as Error).message, "error"),
+        log: createLog(getErrorMessage(error), "error"),
       });
     } finally {
       this.controllers.delete(id);

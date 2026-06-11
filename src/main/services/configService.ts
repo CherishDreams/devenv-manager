@@ -1,7 +1,7 @@
-import { app } from "electron";
-import { join, resolve } from "node:path";
-import { createOfficialMirrorSettings } from "../../shared/mirrorPresets";
 import type { AppConfig } from "../../shared/types";
+import { join, resolve } from "node:path";
+import { app } from "electron";
+import { createOfficialMirrorSettings } from "../../shared/mirrorPresets";
 import { JsonFileStore } from "./jsonFileStore";
 
 const systemDrive = process.env.SystemDrive ?? "C:";

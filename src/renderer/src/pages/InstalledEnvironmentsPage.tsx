@@ -1,14 +1,16 @@
-import { AppstoreOutlined, SearchOutlined } from "@ant-design/icons";
-import { Alert, App as AntdApp, Button, Empty, Space, Tag, Typography } from "antd";
+import type { DiscoveredEnvironment } from "@shared/types";
 import type React from "react";
+import { AppstoreOutlined, SearchOutlined } from "@ant-design/icons";
+import { getErrorMessage } from "@shared/errorUtils";
+import { Alert, App as AntdApp, Button, Empty, Space, Tag, Typography } from "antd";
 import { useCallback, useMemo, useState } from "react";
-import type { DiscoveredEnvironment, InstallRecord } from "@shared/types";
+import { useEnvironmentActions } from "../hooks/useEnvironmentActions";
 import { useEnvironmentStore } from "../stores/environmentStore";
 import { createAdoptInput } from "./installed/adoptInput";
 import { DiscoveryModal } from "./installed/DiscoveryModal";
 import { groupInstallations } from "./installed/groupInstallations";
-import { InstalledGroupSection } from "./installed/InstalledGroupSection";
 import { createInstalledColumns } from "./installed/installedColumns";
+import { InstalledGroupSection } from "./installed/InstalledGroupSection";
 
 export default function InstalledEnvironmentsPage(): React.ReactElement {
   const { message } = AntdApp.useApp();
@@ -21,37 +23,8 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
   const error = useEnvironmentStore((state) => state.error);
   const discoverExisting = useEnvironmentStore((state) => state.discoverExisting);
   const adoptExisting = useEnvironmentStore((state) => state.adoptExisting);
-  const setActive = useEnvironmentStore((state) => state.setActive);
-  const uninstall = useEnvironmentStore((state) => state.uninstall);
+  const { switchActive, uninstallRecord } = useEnvironmentActions();
   const installations = summary?.installations ?? [];
-
-  const switchActive = useCallback(
-    async (record: InstallRecord) => {
-      try {
-        await setActive(record.environment, record.id);
-        message.success(`已切换到 ${record.name} ${record.version}`);
-      } catch (error) {
-        message.error((error as Error).message);
-      }
-    },
-    [message, setActive],
-  );
-
-  const uninstallRecord = useCallback(
-    async (record: InstallRecord) => {
-      try {
-        await uninstall(record.id);
-        message.success(
-          record.uninstallPolicy === "delete-directory"
-            ? `已卸载 ${record.name} ${record.version}`
-            : `已移除 ${record.name} ${record.version} 的接管记录`,
-        );
-      } catch (error) {
-        message.error((error as Error).message);
-      }
-    },
-    [message, uninstall],
-  );
 
   const columns = useMemo(
     () => createInstalledColumns(summary?.activeByKind ?? {}, switchActive, uninstallRecord),
@@ -79,7 +52,7 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
       setSelectedRowKeys(nextDiscovered.filter((item) => !item.alreadyManaged).map((item) => item.id));
       message.success(`扫描完成，发现 ${nextDiscovered.length} 个环境`);
     } catch (error) {
-      message.error((error as Error).message);
+      message.error(getErrorMessage(error));
     } finally {
       setDiscovering(false);
     }
@@ -98,7 +71,7 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
       setDiscovered([]);
       setSelectedRowKeys([]);
     } catch (error) {
-      message.error((error as Error).message);
+      message.error(getErrorMessage(error));
     }
   }, [adoptExisting, message, selectedDiscovered]);
 
@@ -114,21 +87,29 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
             扫描系统环境
           </Button>
           <Tag icon={<AppstoreOutlined />} color="blue">
-            {installations.length} 个版本
+            {installations.length}
+            {" "}
+            个版本
           </Tag>
-          <Tag color="green">{activeCount} 个激活</Tag>
+          <Tag color="green">
+            {activeCount}
+            {" "}
+            个激活
+          </Tag>
         </Space>
       </div>
 
       {error ? <Alert type="error" message={error} showIcon /> : null}
 
-      {groupedInstallations.length > 0 ? (
-        groupedInstallations.map((group) => (
-          <InstalledGroupSection key={group.key} group={group} loading={loading} columns={columns} />
-        ))
-      ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无本程序安装的环境" />
-      )}
+      {groupedInstallations.length > 0
+        ? (
+            groupedInstallations.map((group) => (
+              <InstalledGroupSection key={group.key} group={group} loading={loading} columns={columns} />
+            ))
+          )
+        : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无本程序安装的环境" />
+          )}
 
       <DiscoveryModal
         open={discoveryOpen}

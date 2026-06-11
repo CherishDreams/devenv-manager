@@ -1,7 +1,7 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
+import type { PackageResource } from "../types";
 import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import { fetchText } from "../network";
-import type { PackageResource } from "../types";
 
 function extractPostgresqlWindowsLink(page: string, version: string): string | undefined {
   const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

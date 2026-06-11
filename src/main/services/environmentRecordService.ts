@@ -1,7 +1,3 @@
-import { app } from "electron";
-import { mkdir, rm, symlink } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { environmentDefinitions } from "../../shared/environmentDefinitions";
 import type {
   AdoptEnvironmentInput,
   AppConfig,
@@ -10,9 +6,16 @@ import type {
   InstallRecord,
   InstallScope,
 } from "../../shared/types";
-import { ConfigService } from "./configService";
+import type { ConfigService } from "./configService";
+import type { EnvironmentData } from "./environmentRecords/helpers";
+import type { EnvironmentApplyPlan, EnvironmentCleanupPlan } from "./environmentRecords/registryEnvironment";
+import { mkdir, rm, symlink } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { app } from "electron";
+import { environmentDefinitions } from "../../shared/environmentDefinitions";
 import {
   defaultEnvironmentData,
+
   getActiveByKind,
   getCurrentLinkPath,
   getDefinition,
@@ -22,15 +25,14 @@ import {
   normalizeInstallRecord,
   pathExists,
   unique,
-  type EnvironmentData,
 } from "./environmentRecords/helpers";
 import {
   applyRegistryPlan,
   cleanupRegistryPlan,
+
   registryNeedsCleanup,
   registryNeedsUpdate,
-  type EnvironmentApplyPlan,
-  type EnvironmentCleanupPlan,
+  synchronizeProcessEnvironment,
 } from "./environmentRecords/registryEnvironment";
 import { JsonFileStore } from "./jsonFileStore";
 
@@ -57,6 +59,10 @@ export class EnvironmentRecordService {
       installations: data.installations,
       activeByKind: getActiveByKind(data.installations),
     };
+  }
+
+  synchronizeProcessEnvironment(): Promise<void> {
+    return synchronizeProcessEnvironment(unique(environmentDefinitions.flatMap((definition) => definition.envVars)));
   }
 
   async requiresElevationForInstall(environment: EnvironmentKind): Promise<boolean> {

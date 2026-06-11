@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import type { PackageResource } from "../types";
+import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 
 export function resolveRedisResource(input: InstallTaskInput, config: AppConfig): PackageResource {
   if ((input.vendor ?? "redis-windows") !== "redis-windows") {

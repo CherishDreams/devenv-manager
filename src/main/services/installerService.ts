@@ -1,7 +1,9 @@
+import type { InstallationResult, InstallTaskInput } from "../../shared/types";
+import type { ConfigService } from "./configService";
+import type { InstallerEvents } from "./installer/types";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { InstallationResult, InstallTaskInput } from "../../shared/types";
-import { ConfigService } from "./configService";
+import { applyDatabaseInstallConfig } from "./installer/databaseSetup";
 import {
   getDefinition,
   getEnvVars,
@@ -14,7 +16,6 @@ import { prepareInstalledEnvironment, runInstaller } from "./installer/installEx
 import { downloadFile } from "./installer/network";
 import { runProcess } from "./installer/process";
 import { resolveResource } from "./installer/resourceResolver";
-import type { InstallerEvents } from "./installer/types";
 
 export type { InstallerEvents } from "./installer/types";
 
@@ -70,6 +71,7 @@ export class InstallerService {
     }
 
     await prepareInstalledEnvironment(input, installPath, events.log, signal);
+    await applyDatabaseInstallConfig(input, installPath, events.log, signal);
 
     events.progress(78);
     events.log("安装文件已就绪。");

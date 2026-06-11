@@ -12,6 +12,9 @@ export function createMissingPreloadApi(): NonNullable<typeof window.envManager>
     system: {
       getStatus: reject,
     },
+    permissions: {
+      check: reject,
+    },
     environments: {
       getSummary: reject,
       discover: reject,

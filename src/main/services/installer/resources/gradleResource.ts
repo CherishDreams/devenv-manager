@@ -1,7 +1,7 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
+import type { PackageResource } from "../types";
 import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import { getGradleDistributionBaseUrl } from "../../versionCatalog/gradleProvider";
-import type { PackageResource } from "../types";
 
 export function resolveGradleResource(input: InstallTaskInput, config: AppConfig): PackageResource {
   if ((input.vendor ?? "gradle") !== "gradle") {

@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import type { PackageResource } from "../types";
+import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 
 export function resolveSqliteResource(input: InstallTaskInput, config: AppConfig): PackageResource {
   if ((input.vendor ?? "sqlite") !== "sqlite") {
@@ -9,8 +9,8 @@ export function resolveSqliteResource(input: InstallTaskInput, config: AppConfig
 
   const fileName = `sqlite-tools-win-x64-${input.version}.zip`;
   const configuredMirror = config.mirrors.sqlite.trim();
-  const baseUrl =
-    configuredMirror && configuredMirror !== "official"
+  const baseUrl
+    = configuredMirror && configuredMirror !== "official"
       ? configuredMirror.replace(/\/+$/, "")
       : `https://www.sqlite.org/${new Date().getFullYear()}`;
 

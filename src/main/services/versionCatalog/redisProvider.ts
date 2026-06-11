@@ -1,5 +1,6 @@
 import type { AppConfig, AvailableVersion } from "../../../shared/types";
-import { createVersion, fetchJson, getStaticVersionsWithMirrorNote, type GitHubRelease, maxVersionOptions } from "./utils";
+import type { GitHubRelease } from "./utils";
+import { createVersion, fetchJson, getStaticVersionsWithMirrorNote, maxVersionOptions } from "./utils";
 
 export async function listRedisVersions(config: AppConfig): Promise<AvailableVersion[]> {
   if (config.mirrors.redis.trim() && config.mirrors.redis.trim() !== "official") {

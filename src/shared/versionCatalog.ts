@@ -1,7 +1,7 @@
 import type { AvailableVersion, EnvironmentKind } from "./types";
-import { condaVersionCatalog } from "./versionCatalogs/conda";
 import { androidVersionCatalog } from "./versionCatalogs/android";
 import { cmakeVersionCatalog } from "./versionCatalogs/cmake";
+import { condaVersionCatalog } from "./versionCatalogs/conda";
 import { cppVersionCatalog } from "./versionCatalogs/cpp";
 import { dotnetVersionCatalog } from "./versionCatalogs/dotnet";
 import { flutterVersionCatalog } from "./versionCatalogs/flutter";

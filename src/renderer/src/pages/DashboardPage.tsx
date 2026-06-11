@@ -1,3 +1,5 @@
+import type { EnvironmentDefinition, EnvironmentKind, InstallRecord, ManagedTask } from "@shared/types";
+import type React from "react";
 import {
   AppstoreOutlined,
   CheckCircleOutlined,
@@ -8,9 +10,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { Alert, Button, Descriptions, Empty, Progress, Tag, Typography } from "antd";
-import type React from "react";
 import { useMemo } from "react";
-import type { EnvironmentDefinition, EnvironmentKind, InstallRecord, ManagedTask } from "@shared/types";
 import { EnvironmentLogo } from "../components/EnvironmentLogo";
 import { useConfigStore } from "../stores/configStore";
 import { useEnvironmentStore } from "../stores/environmentStore";
@@ -161,21 +161,23 @@ export default function DashboardPage(): React.ReactElement {
 
   return (
     <div className="dashboard-page">
-      {!status?.isAdministrator ? (
-        <Alert
-          type="warning"
-          showIcon
-          message="当前不是管理员权限"
-          description="系统环境变量写入需要管理员权限，打包后的 Windows 安装版会请求管理员运行。"
-        />
-      ) : null}
+      {!status?.isAdministrator
+        ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="当前不是管理员权限"
+              description="系统环境变量写入需要管理员权限，打包后的 Windows 安装版会请求管理员运行。"
+            />
+          )
+        : null}
 
       <div className="dashboard-toolbar">
         <div>
           <Typography.Title level={3}>开发环境状态</Typography.Title>
           <Typography.Text type="secondary">当前主机的工具链、版本和安装任务</Typography.Text>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={refresh}>
+        <Button icon={<ReloadOutlined />} onClick={() => void refresh()}>
           刷新
         </Button>
       </div>
@@ -193,18 +195,24 @@ export default function DashboardPage(): React.ReactElement {
               <Typography.Title level={4}>当前激活环境</Typography.Title>
               <Typography.Text type="secondary">一键切换后的全局版本</Typography.Text>
             </div>
-            <Tag color="green">{activeRecords.length} 个</Tag>
+            <Tag color="green">
+              {activeRecords.length}
+              {" "}
+              个
+            </Tag>
           </div>
           <div className="dashboard-record-list">
-            {activeRecords.length > 0 ? (
-              activeRecords
-                .slice(0, 6)
-                .map((record) => (
-                  <ActiveEnvironmentRow key={record.id} record={record} definition={definitionsById.get(record.environment)} />
-                ))
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无激活环境" />
-            )}
+            {activeRecords.length > 0
+              ? (
+                  activeRecords
+                    .slice(0, 6)
+                    .map((record) => (
+                      <ActiveEnvironmentRow key={record.id} record={record} definition={definitionsById.get(record.environment)} />
+                    ))
+                )
+              : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无激活环境" />
+                )}
           </div>
         </section>
 
@@ -214,14 +222,19 @@ export default function DashboardPage(): React.ReactElement {
               <Typography.Title level={4}>最近任务</Typography.Title>
               <Typography.Text type="secondary">下载、安装和卸载执行状态</Typography.Text>
             </div>
-            <Tag color={runningTaskCount > 0 ? "processing" : "default"}>运行中 {runningTaskCount}</Tag>
+            <Tag color={runningTaskCount > 0 ? "processing" : "default"}>
+              运行中
+              {runningTaskCount}
+            </Tag>
           </div>
           <div className="dashboard-task-list">
-            {recentTasks.length > 0 ? (
-              recentTasks.map((task) => <TaskRow key={task.id} task={task} />)
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务" />
-            )}
+            {recentTasks.length > 0
+              ? (
+                  recentTasks.map((task) => <TaskRow key={task.id} task={task} />)
+                )
+              : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务" />
+                )}
           </div>
         </section>
       </div>

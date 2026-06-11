@@ -1,7 +1,6 @@
+import type { InstallTaskInput, TaskLogEntry } from "../../../shared/types";
 import { copyFile, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { InstallTaskInput, TaskLogEntry } from "../../../shared/types";
-import { compareVersion } from "./environmentMetadata";
 import { ensureEmptyInstallTarget, pathExists } from "./fileSystem";
 import { runProcess } from "./process";
 
@@ -100,7 +99,7 @@ export async function prepareInstalledEnvironment(
   input: InstallTaskInput,
   installPath: string,
   onLog: (message: string, level?: TaskLogEntry["level"]) => void,
-  signal: AbortSignal,
+  _signal: AbortSignal,
 ): Promise<void> {
   if (input.environment === "nvm") {
     const symlinkPath = join(installPath, "nodejs");
@@ -160,60 +159,5 @@ export async function prepareInstalledEnvironment(
       await rm(latestPath, { recursive: true, force: true });
       onLog("已整理 Android Command Line Tools 目录。");
     }
-    return;
-  }
-
-  if (input.environment === "mysql") {
-    const dataDir = join(installPath, "data");
-    const myIniPath = join(installPath, "my.ini");
-    const dataDirHasContent = (await pathExists(dataDir)) && (await readdir(dataDir)).length > 0;
-
-    await writeFile(
-      myIniPath,
-      [
-        "[mysqld]",
-        `basedir=${installPath.replace(/\\/g, "/")}`,
-        `datadir=${dataDir.replace(/\\/g, "/")}`,
-        "port=3306",
-        "character-set-server=utf8mb4",
-        "",
-        "[client]",
-        "default-character-set=utf8mb4",
-        "",
-      ].join("\r\n"),
-      "utf8",
-    );
-
-    if (!dataDirHasContent && compareVersion(input.version, "5.7.0") >= 0) {
-      await rm(dataDir, { recursive: true, force: true });
-      onLog("正在初始化 MySQL data 目录，默认 root 为空密码。");
-      await runProcess(
-        join(installPath, "bin", "mysqld.exe"),
-        ["--initialize-insecure", `--basedir=${installPath}`, `--datadir=${dataDir}`, "--console"],
-        signal,
-      );
-    } else if (!dataDirHasContent) {
-      onLog("当前 MySQL 历史版本未自动初始化 data 目录，将使用压缩包自带目录。", "warn");
-    }
-
-    onLog("已写入 MySQL my.ini；未注册 Windows 服务。");
-    return;
-  }
-
-  if (input.environment === "postgresql") {
-    const dataDir = join(installPath, "data");
-    const dataDirHasContent = (await pathExists(dataDir)) && (await readdir(dataDir)).length > 0;
-
-    if (!dataDirHasContent) {
-      await rm(dataDir, { recursive: true, force: true });
-      onLog("正在初始化 PostgreSQL data 目录，默认用户 postgres，认证方式 trust。");
-      await runProcess(
-        join(installPath, "bin", "initdb.exe"),
-        ["-D", dataDir, "-U", "postgres", "-A", "trust", "-E", "UTF8", "--no-locale"],
-        signal,
-      );
-    }
-
-    onLog("PostgreSQL data 目录已就绪；未注册 Windows 服务。");
   }
 }

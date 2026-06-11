@@ -1,6 +1,3 @@
-import { environmentDefinitions } from "@shared/environmentDefinitions";
-import { createOfficialMirrorSettings } from "@shared/mirrorPresets";
-import { versionCatalog } from "@shared/versionCatalog";
 import type {
   AdoptEnvironmentInput,
   AppConfig,
@@ -14,6 +11,9 @@ import type {
   TaskDownloadProgress,
   VersionCatalogQuery,
 } from "@shared/types";
+import { environmentDefinitions } from "@shared/environmentDefinitions";
+import { createOfficialMirrorSettings } from "@shared/mirrorPresets";
+import { versionCatalog } from "@shared/versionCatalog";
 
 const mockConfig: AppConfig = {
   globalInstallDir: "E:\\dev_env",
@@ -48,7 +48,7 @@ const mockSystemStatus: SystemStatus = {
   env: {},
 };
 
-export const createMockApi = (): NonNullable<typeof window.envManager> => {
+export function createMockApi(): NonNullable<typeof window.envManager> {
   let config = mockConfig;
   let tasks = readMockTasks();
   let summary = mockSummary;
@@ -102,6 +102,7 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
         };
       });
     } catch {
+      // localStorage unavailable or corrupted
       return [];
     }
   }
@@ -133,7 +134,9 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
       listener(
         tasks.map((task) => ({
           ...task,
-          input: task.input ? { ...task.input } : undefined,
+          input: task.input
+            ? { ...task.input, databaseConfig: task.input.databaseConfig ? { ...task.input.databaseConfig } : undefined }
+            : undefined,
           logs: [...task.logs],
         })),
       ),
@@ -258,7 +261,7 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
       progress: 0,
       createdAt: now,
       updatedAt: now,
-      input: { ...input },
+      input: { ...input, databaseConfig: input.databaseConfig ? { ...input.databaseConfig } : undefined },
       logs: [
         {
           at: now,
@@ -305,6 +308,35 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
     system: {
       getStatus: async () => mockSystemStatus,
     },
+    permissions: {
+      check: async (input) => {
+        const installInput
+          = input.type === "install"
+            ? input.input
+            : input.type === "retry"
+              ? tasks.find((task) => task.id === input.id)?.input
+              : undefined;
+        const needsServiceElevation = Boolean(
+          installInput?.databaseConfig?.enabled && installInput.databaseConfig.installAsService,
+        );
+        const environmentWrite
+          = input.type === "set-active"
+            || input.type === "uninstall"
+            || Boolean(installInput?.configureSystemEnv);
+        const required = !mockSystemStatus.isAdministrator && (needsServiceElevation || (environmentWrite && config.environmentManagement.mode === "direct"));
+
+        return {
+          required,
+          authorized: false,
+          reason: needsServiceElevation ? "注册数据库 Windows 系统服务需要管理员权限。" : "当前操作需要更新系统环境变量。",
+          canSwitchToSymlink:
+            required && !needsServiceElevation && config.environmentManagement.mode === "direct" && input.type !== "uninstall",
+          currentMode: config.environmentManagement.mode,
+          authorizationMode:
+            required && (input.type === "install" || input.type === "retry") ? "restart-app" : required ? "elevated-helper" : "none",
+        };
+      },
+    },
     environments: {
       getSummary: async () => summary,
       discover: async (): Promise<DiscoveredEnvironment[]> => [],
@@ -337,7 +369,7 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
         environmentListeners.forEach((listener) => listener(summary));
         return summary;
       },
-      setActive: async (environment: EnvironmentKind, id: string) => {
+      setActive: async (environment: EnvironmentKind, id: string, _authorized = false) => {
         summary = {
           ...summary,
           installations: summary.installations.map((record) => ({
@@ -352,7 +384,7 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
         environmentListeners.forEach((listener) => listener(summary));
         return summary;
       },
-      uninstall: async (id: string) => {
+      uninstall: async (id: string, _authorized = false) => {
         summary = {
           ...summary,
           installations: summary.installations.filter((record) => record.id !== id),
@@ -372,7 +404,7 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
         persistMockTasks();
         return tasks;
       },
-      createInstall: async (input: InstallTaskInput) => {
+      createInstall: async (input: InstallTaskInput, _authorized = false) => {
         return createMockInstallTask(input);
       },
       cancel: async (id: string) => {
@@ -391,7 +423,7 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
         });
         return tasks.find((item) => item.id === id);
       },
-      retry: async (id: string) => {
+      retry: async (id: string, _authorized = false) => {
         const task = tasks.find((item) => item.id === id);
 
         if (!task) {
@@ -402,7 +434,9 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
           throw new Error("只有失败任务可以重试。");
         }
 
-        const input = task.input ? { ...task.input } : recoverLegacyInput(task);
+        const input = task.input
+          ? { ...task.input, databaseConfig: task.input.databaseConfig ? { ...task.input.databaseConfig } : undefined }
+          : recoverLegacyInput(task);
 
         if (!input) {
           throw new Error("该任务缺少可重试的安装参数，请重新创建安装任务。");
@@ -447,4 +481,4 @@ export const createMockApi = (): NonNullable<typeof window.envManager> => {
       selectDirectory: async () => undefined,
     },
   };
-};
+}

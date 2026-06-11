@@ -1,6 +1,6 @@
-import { Tag, Typography } from "antd";
-import type React from "react";
 import type { EnvironmentDefinition, InstallRecord } from "@shared/types";
+import type React from "react";
+import { Tag, Typography } from "antd";
 import { EnvironmentLogo } from "../../components/EnvironmentLogo";
 import { getEnvironmentStatus } from "./environmentInstallHelpers";
 

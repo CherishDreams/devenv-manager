@@ -1,9 +1,7 @@
 import { spawn } from "node:child_process";
 import { basename } from "node:path";
 
-export function psQuote(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
+export { psQuote } from "../common/shellUtils";
 
 export function runProcess(
   command: string,
@@ -18,18 +16,28 @@ export function runProcess(
     });
     let stdout = "";
     let stderr = "";
+    let settled = false;
 
+    let settle: (fn: () => void) => void;
     const abort = (): void => {
       child.kill();
-      reject(new Error("任务已取消。"));
+      settle(() => reject(new Error("任务已取消。")));
     };
+
+    settle = (fn: () => void): void => {
+      if (settled)
+        return;
+      settled = true;
+      signal.removeEventListener("abort", abort);
+      fn();
+    };
+
+    signal.addEventListener("abort", abort, { once: true });
 
     if (signal.aborted) {
       abort();
       return;
     }
-
-    signal.addEventListener("abort", abort, { once: true });
 
     child.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
@@ -37,24 +45,23 @@ export function runProcess(
     child.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
+
     child.on("error", (error) => {
-      signal.removeEventListener("abort", abort);
-      reject(error);
+      settle(() => reject(error));
     });
+
     child.on("close", (code) => {
-      signal.removeEventListener("abort", abort);
-
-      if (signal.aborted) {
-        reject(new Error("任务已取消。"));
-        return;
-      }
-
-      if (code === 0) {
-        resolveProcess({ stdout, stderr });
-        return;
-      }
-
-      reject(new Error(`${basename(command)} 退出码 ${code}\n${stderr || stdout}`));
+      settle(() => {
+        if (signal.aborted) {
+          reject(new Error("任务已取消。"));
+          return;
+        }
+        if (code === 0) {
+          resolveProcess({ stdout, stderr });
+          return;
+        }
+        reject(new Error(`${basename(command)} 退出码 ${code}\n${stderr || stdout}`));
+      });
     });
   });
 }

@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import type { PackageResource } from "../types";
+import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 
 function getMySqlTrack(version: string): string {
   return version.split(".").slice(0, 2).join(".");
@@ -15,8 +15,8 @@ export function resolveMySqlResource(input: InstallTaskInput, config: AppConfig)
 
   const fileName = `mysql-${input.version}-winx64.zip`;
   const configuredMirror = config.mirrors.mysql.trim();
-  const baseUrl =
-    configuredMirror && configuredMirror !== "official"
+  const baseUrl
+    = configuredMirror && configuredMirror !== "official"
       ? configuredMirror.replace(/\/+$/, "")
       : "https://cdn.mysql.com/Downloads";
 

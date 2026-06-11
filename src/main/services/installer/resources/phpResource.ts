@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import type { PackageResource } from "../types";
+import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 
 export function resolvePhpResource(input: InstallTaskInput, config: AppConfig): PackageResource {
   if ((input.vendor ?? "windows") !== "windows") {
@@ -8,8 +8,8 @@ export function resolvePhpResource(input: InstallTaskInput, config: AppConfig): 
   }
 
   const configuredMirror = config.mirrors.php.trim();
-  const baseUrl =
-    configuredMirror && configuredMirror !== "official" ? configuredMirror.replace(/\/+$/, "") : "https://windows.php.net/downloads/releases";
+  const baseUrl
+    = configuredMirror && configuredMirror !== "official" ? configuredMirror.replace(/\/+$/, "") : "https://windows.php.net/downloads/releases";
   const fileName = `php-${input.version}-Win32-vs17-x64.zip`;
 
   return {

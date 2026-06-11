@@ -1,6 +1,7 @@
+import type { SystemStatus } from "@shared/types";
+import { getErrorMessage } from "@shared/errorUtils";
 import { create } from "zustand";
 import { envManagerApi } from "../api/envManagerApi";
-import type { SystemStatus } from "@shared/types";
 
 interface SystemState {
   status?: SystemStatus;
@@ -19,7 +20,8 @@ export const useSystemStore = create<SystemState>((set) => ({
       const status = await envManagerApi.system.getStatus();
       set({ status, loading: false });
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      console.error("[systemStore] Failed to load system status:", error);
+      set({ error: `获取系统状态失败: ${getErrorMessage(error)}`, loading: false });
     }
   },
 }));

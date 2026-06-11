@@ -1,6 +1,7 @@
-import { mkdir, readdir, rename, rm, stat, cp } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import type { TaskLogEntry } from "../../../shared/types";
+import { cp, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { getErrorMessage } from "../../../shared/errorUtils";
 import { psQuote, runProcess } from "./process";
 
 export async function pathExists(path: string): Promise<boolean> {
@@ -78,7 +79,7 @@ export async function extractZip(
       }
 
       extractor = "PowerShell Expand-Archive";
-      onLog(`tar.exe 解压失败，回退 PowerShell：${(error as Error).message.split("\n")[0]}`, "warn");
+      onLog(`tar.exe 解压失败，回退 PowerShell：${getErrorMessage(error).split("\n")[0]}`, "warn");
       await runProcess(
         "powershell.exe",
         [

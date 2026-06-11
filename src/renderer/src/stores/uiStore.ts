@@ -1,6 +1,7 @@
+import type { ThemeStyle } from "../theme/themeDefinitions";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { defaultThemeStyle, normalizeThemeStyle, type ThemeStyle } from "../theme/themeDefinitions";
+import { defaultThemeStyle, normalizeThemeStyle } from "../theme/themeDefinitions";
 
 interface UiState {
   themeStyle: ThemeStyle;
@@ -19,6 +20,6 @@ export const useUiStore = create<UiState>()(
         ...currentState,
         themeStyle: normalizeThemeStyle((persistedState as Partial<UiState> | undefined)?.themeStyle),
       }),
-    }
-  )
+    },
+  ),
 );

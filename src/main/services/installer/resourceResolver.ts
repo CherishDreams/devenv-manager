@@ -1,4 +1,5 @@
 import type { AppConfig, InstallTaskInput } from "../../../shared/types";
+import type { PackageResource } from "./types";
 import { resolveAndroidResource } from "./resources/androidResource";
 import { resolveCMakeResource } from "./resources/cmakeResource";
 import { resolveCondaResource } from "./resources/condaResource";
@@ -22,7 +23,6 @@ import { resolveRedisResource } from "./resources/redisResource";
 import { resolveRubyResource } from "./resources/rubyResource";
 import { resolveRustResource } from "./resources/rustResource";
 import { resolveSqliteResource } from "./resources/sqliteResource";
-import type { PackageResource } from "./types";
 
 export async function resolveResource(
   input: InstallTaskInput,
@@ -76,5 +76,9 @@ export async function resolveResource(
       return resolveRedisResource(input, config);
     case "sqlite":
       return resolveSqliteResource(input, config);
+    default: {
+      const unhandled: never = input.environment;
+      throw new Error(`不支持的环境类型：${String(unhandled)}`);
+    }
   }
 }

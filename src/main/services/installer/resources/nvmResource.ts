@@ -1,6 +1,6 @@
 import type { AppConfig, InstallTaskInput } from "../../../../shared/types";
-import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 import type { PackageResource } from "../types";
+import { getMirrorSourceName } from "../../../../shared/mirrorPresets";
 
 export function resolveNvmResource(input: InstallTaskInput, config: AppConfig): PackageResource {
   const vendor = input.vendor ?? "coreybutler";
@@ -10,8 +10,8 @@ export function resolveNvmResource(input: InstallTaskInput, config: AppConfig): 
   }
 
   const configuredMirror = config.mirrors.nvm.trim();
-  const releaseBaseUrl =
-    configuredMirror && configuredMirror !== "official"
+  const releaseBaseUrl
+    = configuredMirror && configuredMirror !== "official"
       ? configuredMirror.replace(/\/+$/, "")
       : `https://github.com/coreybutler/nvm-windows/releases/download/${input.version}`;
 

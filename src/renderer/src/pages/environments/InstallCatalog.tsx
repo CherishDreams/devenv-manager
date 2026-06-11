@@ -1,14 +1,14 @@
-import { ArrowLeftOutlined, CloudDownloadOutlined } from "@ant-design/icons";
-import { Button, Card, Empty, Space, Table, Tag, Typography } from "antd";
+import type { EnvironmentDefinition, EnvironmentKind, InstallRecord } from "@shared/types";
 import type { TableColumnsType } from "antd";
 import type React from "react";
+import { ArrowLeftOutlined, CloudDownloadOutlined } from "@ant-design/icons";
+import { Button, Card, Empty, Space, Table, Tag, Typography } from "antd";
 import { useMemo } from "react";
-import type { EnvironmentDefinition, EnvironmentKind, InstallRecord } from "@shared/types";
 import { EnvironmentLogo } from "../../components/EnvironmentLogo";
+import { useConfigStore } from "../../stores/configStore";
 import { EnvironmentCard } from "./EnvironmentCard";
 import { getEnvironmentStatus, groupDefinitions } from "./environmentInstallHelpers";
 import { OperationArea } from "./OperationArea";
-import { useConfigStore } from "../../stores/configStore";
 
 export function InstallCatalog({
   definitions,

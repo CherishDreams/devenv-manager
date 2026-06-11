@@ -1,4 +1,5 @@
-import { createVersion, type EnvironmentVersionCatalog } from "./createVersion";
+import type { EnvironmentVersionCatalog } from "./createVersion";
+import { createVersion } from "./createVersion";
 
 export const redisVersionCatalog: EnvironmentVersionCatalog = {
   "redis-windows": [

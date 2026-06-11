@@ -1,6 +1,7 @@
+import type { AppConfig } from "@shared/types";
+import { getErrorMessage } from "@shared/errorUtils";
 import { create } from "zustand";
 import { envManagerApi } from "../api/envManagerApi";
-import type { AppConfig } from "@shared/types";
 
 interface ConfigState {
   config?: AppConfig;
@@ -20,7 +21,8 @@ export const useConfigStore = create<ConfigState>((set) => ({
       const config = await envManagerApi.config.get();
       set({ config, loading: false });
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      console.error("[configStore] Failed to load config:", error);
+      set({ error: `加载配置失败: ${getErrorMessage(error)}`, loading: false });
     }
   },
   update: async (patch) => {
@@ -29,7 +31,8 @@ export const useConfigStore = create<ConfigState>((set) => ({
       const config = await envManagerApi.config.update(patch);
       set({ config, loading: false });
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      console.error("[configStore] Failed to update config:", error);
+      set({ error: `更新配置失败: ${getErrorMessage(error)}`, loading: false });
       throw error;
     }
   },

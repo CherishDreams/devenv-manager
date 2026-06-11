@@ -1,3 +1,4 @@
+import type React from "react";
 import {
   AppstoreOutlined,
   BellOutlined,
@@ -8,21 +9,20 @@ import {
   ToolOutlined,
 } from "@ant-design/icons";
 import { App as AntdApp, Badge, Button, ConfigProvider, Spin, Switch, Tooltip, Typography } from "antd";
-import type React from "react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { AppLogo } from "./components/AppLogo";
 import { useConfigStore } from "./stores/configStore";
 import { useEnvironmentStore } from "./stores/environmentStore";
 import { useSystemStore } from "./stores/systemStore";
 import { useTaskStore } from "./stores/taskStore";
 import { useUiStore } from "./stores/uiStore";
-import { AppLogo } from "./components/AppLogo";
 import { getThemeDefinition, themeBodyClasses } from "./theme/themeDefinitions";
 
 type PageKey = "dashboard" | "installed" | "environments" | "logs" | "settings";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const InstalledEnvironmentsPage = lazy(() => import("./pages/InstalledEnvironmentsPage"));
-const EnvironmentsPage = lazy(() => import("./pages/EnvironmentsPage"));
+const EnvironmentsPage = lazy(() => import("./pages/EnvironmentsPage").then((mod) => ({ default: mod.EnvironmentInstallPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const LogsPage = lazy(() => import("./pages/LogsPage"));
 
@@ -215,13 +215,13 @@ export default function App(): React.ReactElement {
   }, [loadConfig, loadEnvironment, loadSystem, loadTasks, subscribeToEnvironmentEvents, subscribeToTaskEvents]);
 
   useEffect(() => {
-    const navigate = (event: Event): void => {
-      const page = (event as CustomEvent<PageKey>).detail;
+    const navigate = ((event: CustomEvent<PageKey>): void => {
+      const page = event.detail;
 
       if (page) {
         setPageKey(page);
       }
-    };
+    }) as EventListener;
 
     window.addEventListener("env-manager:navigate", navigate);
     return () => window.removeEventListener("env-manager:navigate", navigate);
@@ -256,28 +256,32 @@ export default function App(): React.ReactElement {
     <ConfigProvider theme={themeConfig}>
       <AntdApp>
         <div className={`app-shell app-shell-${navigationLayout}`}>
-          {navigationLayout === "sidebar" ? (
-            <ClassicSidebar pageKey={pageKey} onNavigate={setPageKey} />
-          ) : (
-            <PageRail pageKey={pageKey} onNavigate={setPageKey} onOpenSettings={() => setPageKey("settings")} />
-          )}
+          {navigationLayout === "sidebar"
+            ? (
+                <ClassicSidebar pageKey={pageKey} onNavigate={setPageKey} />
+              )
+            : (
+                <PageRail pageKey={pageKey} onNavigate={setPageKey} onOpenSettings={() => setPageKey("settings")} />
+              )}
           <main className={pageKey === "settings" ? "shell-main shell-main-settings" : "shell-main"}>
-            {pageKey !== "settings" ? (
-              <header className="app-header">
-                <div className="app-header-title">
-                  <Typography.Title level={3}>{pageTitles[pageKey]}</Typography.Title>
-                  <Typography.Text>DevEnv Manager</Typography.Text>
-                </div>
-                <HeaderStatus />
-              </header>
-            ) : null}
+            {pageKey !== "settings"
+              ? (
+                  <header className="app-header">
+                    <div className="app-header-title">
+                      <Typography.Title level={3}>{pageTitles[pageKey]}</Typography.Title>
+                      <Typography.Text>DevEnv Manager</Typography.Text>
+                    </div>
+                    <HeaderStatus />
+                  </header>
+                )
+              : null}
             <section className="app-content">
               <Suspense
-                fallback={
+                fallback={(
                   <div className="page-loading">
                     <Spin />
                   </div>
-                }
+                )}
               >
                 {renderPage(pageKey)}
               </Suspense>

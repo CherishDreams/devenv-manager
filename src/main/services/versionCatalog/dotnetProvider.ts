@@ -12,7 +12,7 @@ interface DotnetReleaseIndex {
 
 interface DotnetReleases {
   releases: Array<{
-    "sdk": {
+    sdk: {
       version: string;
     };
   }>;

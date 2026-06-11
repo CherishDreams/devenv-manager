@@ -105,7 +105,7 @@ export function createOfficialMirrorSettings(): MirrorSettings {
 
 export function normalizeMirrorValue(value: string | undefined): string {
   const normalizedValue = value?.trim();
-  return normalizedValue ? normalizedValue : officialMirrorValue;
+  return normalizedValue || officialMirrorValue;
 }
 
 export function isOfficialMirrorValue(value: string | undefined): boolean {
@@ -177,7 +177,8 @@ export function getConfiguredMirrorEntries(mirrors: MirrorSettings): Array<{
   value: string;
   displayName: string;
 }> {
-  return Object.entries(mirrors).flatMap(([environment, value]) => {
+  return (Object.keys(mirrors) as EnvironmentKind[]).flatMap((environment) => {
+    const value = mirrors[environment];
     const normalizedValue = normalizeMirrorValue(value);
 
     if (normalizedValue === officialMirrorValue) {
@@ -186,9 +187,9 @@ export function getConfiguredMirrorEntries(mirrors: MirrorSettings): Array<{
 
     return [
       {
-        environment: environment as EnvironmentKind,
+        environment,
         value: normalizedValue,
-        displayName: getMirrorDisplayName(environment as EnvironmentKind, normalizedValue),
+        displayName: getMirrorDisplayName(environment, normalizedValue),
       },
     ];
   });
