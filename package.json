@@ -4,12 +4,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "Windows desktop environment manager for developer runtimes.",
-  "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "dist": "pnpm build && electron-builder",
+    "dev": "tauri dev",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "dist": "tauri build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
@@ -20,15 +19,18 @@
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.0.0",
     "antd": "^5.26.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "undici": "^8.4.0",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.0.0",
     "@eslint-react/eslint-plugin": "^5.8.18",
+    "@tauri-apps/cli": "^2.11.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -36,9 +38,6 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.5.1",
-    "electron": "^35.2.1",
-    "electron-builder": "^26.0.12",
-    "electron-vite": "^3.1.0",
     "eslint": "^10.4.1",
     "eslint-plugin-format": "^2.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
@@ -47,35 +46,5 @@
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^4.1.8"
-  },
-  "build": {
-    "appId": "com.local.envmanager",
-    "productName": "环境管理",
-    "directories": {
-      "buildResources": "build",
-      "output": "release"
-    },
-    "files": [
-      "out/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "build/icon.ico",
-        "to": "icon.ico"
-      },
-      {
-        "from": "build/icon.png",
-        "to": "icon.png"
-      }
-    ],
-    "win": {
-      "icon": "build/icon.ico",
-      "target": "nsis",
-      "requestedExecutionLevel": "asInvoker"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
   }
 }

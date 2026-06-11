@@ -1,6 +1,4 @@
-import { createMissingPreloadApi } from "./missingPreloadApi";
-import { createMockApi } from "./mockEnvManagerApi";
+import { tauriApi } from "./tauriApi";
 
-const runningInElectron = navigator.userAgent.includes("Electron");
-
-export const envManagerApi = window.envManager ?? (runningInElectron ? createMissingPreloadApi() : createMockApi());
+// Use Tauri API for all environments
+export const envManagerApi = tauriApi;

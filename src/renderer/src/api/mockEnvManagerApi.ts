@@ -7,6 +7,7 @@ import type {
   EnvironmentSummary,
   InstallTaskInput,
   ManagedTask,
+  PrivilegeCheckInput,
   SystemStatus,
   TaskDownloadProgress,
   VersionCatalogQuery,
@@ -312,7 +313,7 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
       getStatus: async () => mockSystemStatus,
     },
     permissions: {
-      check: async (input) => {
+      check: async (input: PrivilegeCheckInput) => {
         const installInput =
           input.type === "install"
             ? input.input
