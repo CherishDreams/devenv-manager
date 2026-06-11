@@ -6,46 +6,78 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   release:
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows-latest
-            args: ''
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-2022
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: pnpm
+          node-version: '20'
 
-      - name: Install Rust
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
-        run: pnpm install
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
 
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+      - name: Get pnpm store directory
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-pnpm-store-
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri App
+        run: pnpm tauri build
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p release-assets
+          VERSION="${GITHUB_REF_NAME}"
+
+          # NSIS installer
+          cp src-tauri/target/release/bundle/nsis/DevEnvManager_${VERSION#v}_x64-setup.exe \
+            "release-assets/DevEnvManager-${VERSION}-x64-setup.exe"
+
+          # Portable: zip the standalone exe
+          7z a "release-assets/DevEnvManager-${VERSION}-x64-portable.zip" \
+            src-tauri/target/release/env-manager.exe
+
+          echo "Release assets prepared:"
+          ls -la release-assets/
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'DevEnv Manager v__VERSION__'
-          releaseBodyPath: RELEASE_NOTES.md
-          releaseDraft: false
+          name: 'DevEnv Manager ${{ github.ref_name }}'
+          body_path: RELEASE_NOTES.md
+          draft: false
           prerelease: false
-          args: ${{ matrix.args }}
+          files: release-assets/*
