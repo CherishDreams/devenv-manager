@@ -147,4 +147,4 @@ If this project is helpful to you, consider supporting its development:
 
 - **WeChat**: Scan the QR code below to tip via WeChat Pay
 
-  <img src="build/wechat-sponsor.png" alt="WeChat Sponsor QR Code" width="200" />
+  <img src="assets/wechat-sponsor.png" alt="WeChat Sponsor QR Code" width="200" />

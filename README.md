@@ -147,4 +147,4 @@ src-tauri/
 
 - **微信赞赏**：扫描下方二维码
 
-  <img src="build/wechat-sponsor.png" alt="微信赞赏码" width="200" />
+  <img src="assets/wechat-sponsor.png" alt="微信赞赏码" width="200" />
