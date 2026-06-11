@@ -2,7 +2,7 @@
 
 [中文](README.md)
 
-Windows desktop environment manager for developer runtimes, built with Electron, React, Ant Design, Zustand and pnpm.
+Windows desktop environment manager for developer runtimes, built with Tauri 2, Rust, React, Ant Design, Zustand and pnpm.
 
 DevEnv Manager helps you install, adopt, switch and remove local development runtimes from a single desktop app. It focuses on multi-version coexistence, predictable installation paths, task logs, proxy/mirror configuration and Windows environment variable management.
 
@@ -59,24 +59,14 @@ Databases and database tools:
 - Redis for Windows
 - SQLite tools
 
-## Tech Stack
-
-- Electron 35
-- electron-vite
-- React 18
-- TypeScript
-- Ant Design 5
-- Zustand
-- pnpm
-- undici
-
 ## Requirements
 
 - Windows
 - Node.js
 - pnpm
+- Rust (required for development, used to compile the backend)
 
-The packaged Windows app requests administrator privileges because system environment variable writes require elevation. In development mode, switching or installing with system environment configuration may also require an elevated Electron process.
+The packaged Windows app requests administrator privileges because system environment variable writes require elevation. In development mode, switching or installing with system environment configuration may also require an elevated process.
 
 ## Getting Started
 
@@ -86,19 +76,19 @@ Install dependencies:
 pnpm install
 ```
 
-Start the development app:
+Start the development app (launches both Vite frontend and Tauri backend):
 
 ```powershell
 pnpm dev
 ```
 
-Build the app:
+Type check and build frontend:
 
 ```powershell
 pnpm build
 ```
 
-Create a Windows installer:
+Create a Windows installer (NSIS):
 
 ```powershell
 pnpm dist
@@ -108,26 +98,28 @@ pnpm dist
 
 ```text
 src/
-  main/       Electron main process, IPC, installation tasks and Windows services
-  preload/    Safe renderer-to-main bridge
   renderer/   React UI, stores, pages, styles and assets
   shared/     Shared types, environment definitions and version catalogs
+src-tauri/
+  src/        Rust backend: IPC commands, services, installer and environment management
+  capabilities/  Tauri permissions and capability configuration
+  tauri.conf.json  Tauri application configuration
 ```
 
 Key modules:
 
 - `src/shared/environmentDefinitions.ts`: environment metadata, vendors, env vars and PATH entries
 - `src/shared/versionCatalogs/`: static offline version catalogs split by environment
-- `src/main/services/versionCatalog/`: online version providers
-- `src/main/services/installer/resources/`: per-environment package URL resolvers
-- `src/main/services/installer/`: download, extraction, installer execution and verification
-- `src/main/services/taskService.ts`: persisted install task queue and logs
-- `src/main/services/environmentRecordService.ts`: installed/adopted environment records and active version switching
+- `src-tauri/src/services/version_catalog/`: online version providers
+- `src-tauri/src/services/installer/`: download, extraction, installer execution and verification
+- `src-tauri/src/services/task_service.rs`: persisted install task queue and logs
+- `src-tauri/src/services/environment_record.rs`: installed/adopted environment records and active version switching
+- `src-tauri/src/commands/`: Tauri IPC command entry points
 - `src/renderer/src/pages/`: main UI pages
 
 ## Data and Installation Paths
 
-The app stores user configuration and task records under Electron's `userData` directory.
+The app stores user configuration and task records under Tauri's `AppData` directory (`%APPDATA%\com.local.envmanager\`).
 
 Install directory and download cache directory are configurable in Settings. During local testing, `E:\dev_env` is a convenient install root, with cached downloads under `E:\dev_env\.cache`.
 
