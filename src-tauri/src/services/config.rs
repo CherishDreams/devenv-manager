@@ -35,11 +35,13 @@ pub struct ProxyConfig {
 
 impl Default for AppConfig {
     fn default() -> Self {
-        let testing_global_install_dir = "E:\\dev_env".to_string();
+        let global_install_dir = dirs::home_dir()
+            .map(|p| p.join("dev_env").to_string_lossy().to_string())
+            .unwrap_or_else(|| "C:\\dev_env".to_string());
 
         Self {
-            global_install_dir: testing_global_install_dir.clone(),
-            download_cache_dir: format!("{}\\.cache", testing_global_install_dir),
+            global_install_dir: global_install_dir.clone(),
+            download_cache_dir: format!("{}\\.cache", global_install_dir),
             retain_downloads: true,
             appearance: AppearanceConfig {
                 navigation_layout: "sidebar".to_string(),

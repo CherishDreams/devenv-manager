@@ -728,6 +728,7 @@ name = "env-manager"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "dirs",
  "futures-util",
  "libc",
  "regex-lite",

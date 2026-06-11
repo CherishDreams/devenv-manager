@@ -68,16 +68,6 @@ pub fn run() {
 
             app.manage(state);
 
-            // Restore tasks from disk (async, fire-and-forget)
-            let task_arc_restore = {
-                let s = app.state::<AppState>();
-                s.task.clone()
-            };
-            tauri::async_runtime::spawn(async move {
-                let mut svc = task_arc_restore.lock().await;
-                let _ = svc.restore().await;
-            });
-
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

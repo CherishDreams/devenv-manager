@@ -5,13 +5,14 @@ use crate::state::AppState;
 #[tauri::command]
 pub async fn tasks_list(state: tauri::State<'_, AppState>) -> AppResult<Vec<ManagedTask>> {
     let svc = state.task.lock().await;
-    Ok(svc.list())
+    Ok(svc.list().await)
 }
 
 #[tauri::command]
 pub async fn tasks_create_install(
     state: tauri::State<'_, AppState>,
     input: InstallTaskInput,
+    #[allow(unused_variables)] authorized: bool,
 ) -> AppResult<ManagedTask> {
     let mut svc = state.task.lock().await;
     Ok(svc.create_install_task(input).await)
@@ -30,6 +31,7 @@ pub async fn tasks_cancel(
 pub async fn tasks_retry(
     state: tauri::State<'_, AppState>,
     id: String,
+    #[allow(unused_variables)] authorized: bool,
 ) -> AppResult<ManagedTask> {
     let mut svc = state.task.lock().await;
     svc.retry_task(&id).await
@@ -58,7 +60,7 @@ pub async fn tasks_get_retry_input(
     id: String,
 ) -> AppResult<Option<InstallTaskInput>> {
     let svc = state.task.lock().await;
-    Ok(svc.get_retry_input(&id))
+    Ok(svc.get_retry_input(&id).await)
 }
 
 #[tauri::command]
@@ -76,7 +78,7 @@ pub async fn permissions_check(
         PrivilegeCheckInput::Install { input } => Some(input.clone()),
         PrivilegeCheckInput::Retry { id } => {
             let svc = state.task.lock().await;
-            svc.get_retry_input(id)
+            svc.get_retry_input(id).await
         }
         _ => None,
     };

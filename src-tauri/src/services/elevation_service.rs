@@ -38,7 +38,7 @@ pub struct ElevatedOperationResult {
     pub error: Option<String>,
 }
 
-static mut ELEVATED_BROKER_PIPE_PATH: Option<String> = None;
+static ELEVATED_BROKER_PIPE_PATH: tokio::sync::Mutex<Option<String>> = tokio::sync::Mutex::const_new(None);
 
 fn create_pipe_path() -> String {
     format!("\\\\.\\pipe\\env-manager-{}-{}", std::process::id(), uuid::Uuid::new_v4())
@@ -127,13 +127,16 @@ async fn wait_for_broker(pipe_path: &str) -> AppResult<()> {
 }
 
 pub async fn has_active_elevated_broker() -> bool {
-    unsafe {
-        if let Some(ref pipe_path) = ELEVATED_BROKER_PIPE_PATH {
-            match send_broker_command(pipe_path, &ElevatedBrokerCommand::Ping, 750).await {
-                Ok(result) if result.ok => return true,
-                _ => {
-                    ELEVATED_BROKER_PIPE_PATH = None;
-                }
+    let pipe_path = {
+        let guard = ELEVATED_BROKER_PIPE_PATH.lock().await;
+        guard.clone()
+    };
+    if let Some(ref pipe_path) = pipe_path {
+        match send_broker_command(pipe_path, &ElevatedBrokerCommand::Ping, 750).await {
+            Ok(result) if result.ok => return true,
+            _ => {
+                let mut guard = ELEVATED_BROKER_PIPE_PATH.lock().await;
+                *guard = None;
             }
         }
     }
@@ -141,12 +144,14 @@ pub async fn has_active_elevated_broker() -> bool {
 }
 
 async fn ensure_elevated_broker() -> AppResult<String> {
-    unsafe {
-        if let Some(ref pipe_path) = ELEVATED_BROKER_PIPE_PATH {
+    // Check if we have an existing broker
+    {
+        let guard = ELEVATED_BROKER_PIPE_PATH.lock().await;
+        if let Some(ref pipe_path) = *guard {
             match send_broker_command(pipe_path, &ElevatedBrokerCommand::Ping, 3000).await {
                 Ok(result) if result.ok => return Ok(pipe_path.clone()),
                 _ => {
-                    ELEVATED_BROKER_PIPE_PATH = None;
+                    // Fall through to create a new broker
                 }
             }
         }
@@ -162,8 +167,9 @@ async fn ensure_elevated_broker() -> AppResult<String> {
 
     wait_for_broker(&pipe_path).await?;
 
-    unsafe {
-        ELEVATED_BROKER_PIPE_PATH = Some(pipe_path.clone());
+    {
+        let mut guard = ELEVATED_BROKER_PIPE_PATH.lock().await;
+        *guard = Some(pipe_path.clone());
     }
 
     Ok(pipe_path)
@@ -187,8 +193,9 @@ pub async fn request_elevated_environment_operation(
         Ok(r) => r,
         Err(_) => {
             // Broker died, restart and retry
-            unsafe {
-                ELEVATED_BROKER_PIPE_PATH = None;
+            {
+                let mut guard = ELEVATED_BROKER_PIPE_PATH.lock().await;
+                *guard = None;
             }
             let pipe_path = ensure_elevated_broker().await?;
             send_broker_command(&pipe_path, &command, 30000).await?
@@ -205,11 +212,14 @@ pub async fn request_elevated_environment_operation(
 }
 
 pub async fn shutdown_elevated_broker() -> AppResult<()> {
-    unsafe {
-        if let Some(ref pipe_path) = ELEVATED_BROKER_PIPE_PATH {
-            let _ = send_broker_command(pipe_path, &ElevatedBrokerCommand::Shutdown, 5000).await;
-            ELEVATED_BROKER_PIPE_PATH = None;
-        }
+    let pipe_path = {
+        let guard = ELEVATED_BROKER_PIPE_PATH.lock().await;
+        guard.clone()
+    };
+    if let Some(ref pipe_path) = pipe_path {
+        let _ = send_broker_command(pipe_path, &ElevatedBrokerCommand::Shutdown, 5000).await;
+        let mut guard = ELEVATED_BROKER_PIPE_PATH.lock().await;
+        *guard = None;
     }
     Ok(())
 }

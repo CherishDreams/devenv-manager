@@ -54,15 +54,16 @@ enum TaskUpdate {
     Download { id: String, progress: TaskDownloadProgress },
     Status { id: String, status: TaskStatus, log: Option<TaskLogEntry> },
     Done { id: String },
+    /// Signals the background loop to persist current state and emit the changed event.
+    PersistAndEmit,
 }
 
 pub struct TaskService {
     app_handle: AppHandle,
     config: Arc<Mutex<ConfigService>>,
     env_record: Arc<Mutex<EnvironmentRecordService>>,
-    tasks: Vec<ManagedTask>,
+    tasks: Arc<Mutex<Vec<ManagedTask>>>,
     controllers: HashMap<String, CancellationToken>,
-    store: JsonFileStore<TaskData>,
     update_tx: mpsc::UnboundedSender<TaskUpdate>,
 }
 
@@ -77,17 +78,51 @@ impl TaskService {
             .resolve("tasks.json", BaseDirectory::AppData)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
+        let store = JsonFileStore::new(tasks_path.clone(), TaskData::default());
         let (update_tx, update_rx) = mpsc::unbounded_channel();
 
-        // The background update loop owns the shared task list and the store.
-        // It processes mutations from the channel, persists, and emits events.
-        // This avoids holding the TaskService mutex during long-running installs.
-        let tasks_shared = Arc::new(Mutex::new(Vec::<ManagedTask>::new()));
+        // Restore tasks from disk synchronously before spawning the background loop.
+        // This ensures the shared vec is populated before any updates arrive.
+        let data = match std::fs::read_to_string(&tasks_path) {
+            Ok(content) => serde_json::from_str::<TaskData>(&content).unwrap_or_default(),
+            Err(_) => TaskData::default(),
+        };
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut changed = false;
+
+        let restored_tasks: Vec<ManagedTask> = data
+            .tasks
+            .into_iter()
+            .map(|mut task| {
+                if is_active(&task) {
+                    changed = true;
+                    task.status = TaskStatus::Failed;
+                    task.updated_at = now.clone();
+                    task.logs.push(create_log(
+                        "程序重启时任务尚未完成，已标记为中断。可重试此任务。",
+                        "warn",
+                    ));
+                }
+                task
+            })
+            .collect();
+
+        // If any tasks were marked as failed, persist immediately via the background loop.
+        let tasks_shared = Arc::new(Mutex::new(restored_tasks));
         let tasks_for_loop = tasks_shared.clone();
         let app_handle_loop = app_handle.clone();
-        let store_for_loop = JsonFileStore::new(tasks_path, TaskData::default());
 
+        // The background loop is the sole writer to disk.
+        // All mutations go through the shared vec + channel pipeline.
         tauri::async_runtime::spawn(async move {
+            // If restore changed tasks, persist right away.
+            if changed {
+                let tasks = tasks_for_loop.lock().await;
+                let data = TaskData { tasks: tasks.clone() };
+                let _ = store.write(&data).await;
+            }
+
             let mut rx = update_rx;
             while let Some(update) = rx.recv().await {
                 let mut tasks = tasks_for_loop.lock().await;
@@ -119,65 +154,29 @@ impl TaskService {
                             task.updated_at = chrono::Utc::now().to_rfc3339();
                         }
                     }
-                    TaskUpdate::Done { .. } => {
+                    TaskUpdate::Done { .. } | TaskUpdate::PersistAndEmit => {
                         // Just triggers persist + emit below
                     }
                 }
                 // Persist and emit
                 let data = TaskData { tasks: tasks.clone() };
-                let _ = store_for_loop.write(&data).await;
+                let _ = store.write(&data).await;
                 let _ = app_handle_loop.emit("tasks:changed", &*tasks);
             }
         });
-
-        // The struct also needs a second store for its own reads (restore).
-        let tasks_path2 = app_handle
-            .path()
-            .resolve("tasks.json", BaseDirectory::AppData)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
         Ok(Self {
             app_handle,
             config,
             env_record,
-            tasks: Vec::new(),
+            tasks: tasks_shared,
             controllers: HashMap::new(),
-            store: JsonFileStore::new(tasks_path2, TaskData::default()),
             update_tx,
         })
     }
 
-    /// Restore tasks from disk on startup.
-    pub async fn restore(&mut self) -> AppResult<()> {
-        let data = self.store.read().await.unwrap_or(TaskData::default());
-        let now = chrono::Utc::now().to_rfc3339();
-        let mut changed = false;
-
-        self.tasks = data
-            .tasks
-            .into_iter()
-            .map(|mut task| {
-                if is_active(&task) {
-                    changed = true;
-                    task.status = TaskStatus::Failed;
-                    task.updated_at = now.clone();
-                    task.logs.push(create_log(
-                        "程序重启时任务尚未完成，已标记为中断。可重试此任务。",
-                        "warn",
-                    ));
-                }
-                task
-            })
-            .collect();
-
-        if changed {
-            self.persist().await;
-        }
-        Ok(())
-    }
-
-    pub fn list(&self) -> Vec<ManagedTask> {
-        self.tasks.clone()
+    pub async fn list(&self) -> Vec<ManagedTask> {
+        self.tasks.lock().await.clone()
     }
 
     pub async fn create_install_task(&mut self, input: InstallTaskInput) -> ManagedTask {
@@ -208,9 +207,11 @@ impl TaskService {
             ],
         };
 
-        self.tasks.insert(0, task.clone());
-        self.persist().await;
-        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
+        {
+            let mut tasks = self.tasks.lock().await;
+            tasks.insert(0, task.clone());
+        }
+        let _ = self.update_tx.send(TaskUpdate::PersistAndEmit);
 
         let task_id = task.id.clone();
         self.start_install_task(&task_id, clone_input(&input));
@@ -218,86 +219,108 @@ impl TaskService {
         task
     }
 
-    pub fn get_retry_input(&self, id: &str) -> Option<InstallTaskInput> {
-        self.tasks.iter().find(|t| t.id == id)?.input.as_ref().map(clone_input)
+    pub async fn get_retry_input(&self, id: &str) -> Option<InstallTaskInput> {
+        let tasks = self.tasks.lock().await;
+        tasks.iter().find(|t| t.id == id)?.input.as_ref().map(clone_input)
     }
 
     pub async fn retry_task(&mut self, id: &str) -> AppResult<ManagedTask> {
-        let task = self.tasks.iter().find(|t| t.id == id)
-            .ok_or_else(|| AppError::Message("未找到要重试的任务。".to_string()))?;
+        let input = {
+            let tasks = self.tasks.lock().await;
+            let task = tasks.iter().find(|t| t.id == id)
+                .ok_or_else(|| AppError::Message("未找到要重试的任务。".to_string()))?;
 
-        if task.status != TaskStatus::Failed {
-            return Err(AppError::Message("只有失败任务可以重试。".to_string()));
-        }
+            if task.status != TaskStatus::Failed {
+                return Err(AppError::Message("只有失败任务可以重试。".to_string()));
+            }
 
-        let input = task.input.as_ref().map(clone_input)
-            .ok_or_else(|| AppError::Message("该任务缺少可重试的安装参数，请重新创建安装任务。".to_string()))?;
+            task.input.as_ref().map(clone_input)
+                .ok_or_else(|| AppError::Message("该任务缺少可重试的安装参数，请重新创建安装任务。".to_string()))?
+        };
 
         let now = chrono::Utc::now().to_rfc3339();
-        if let Some(task) = self.tasks.iter_mut().find(|t| t.id == id) {
-            task.status = TaskStatus::Queued;
-            task.progress = 0.0;
-            task.download = None;
-            task.updated_at = now;
-            task.logs.push(create_log("任务已重新加入队列，等待执行。", "info"));
-        }
-
-        self.persist().await;
-        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
+        let result_task = {
+            let mut tasks = self.tasks.lock().await;
+            if let Some(task) = tasks.iter_mut().find(|t| t.id == id) {
+                task.status = TaskStatus::Queued;
+                task.progress = 0.0;
+                task.download = None;
+                task.updated_at = now;
+                task.logs.push(create_log("任务已重新加入队列，等待执行。", "info"));
+            }
+            tasks.iter().find(|t| t.id == id).unwrap().clone()
+        };
+        let _ = self.update_tx.send(TaskUpdate::PersistAndEmit);
 
         let task_id = id.to_string();
         self.start_install_task(&task_id, clone_input(&input));
 
-        Ok(self.tasks.iter().find(|t| t.id == id).unwrap().clone())
+        Ok(result_task)
     }
 
     pub async fn cancel_task(&mut self, id: &str) -> Option<ManagedTask> {
-        let task = self.tasks.iter().find(|t| t.id == id)?;
-        if !is_active(task) {
-            return Some(task.clone());
+        let should_cancel = {
+            let tasks = self.tasks.lock().await;
+            tasks.iter().find(|t| t.id == id).map(|t| is_active(t)).unwrap_or(false)
+        };
+
+        if !should_cancel {
+            let tasks = self.tasks.lock().await;
+            return tasks.iter().find(|t| t.id == id).cloned();
         }
 
         if let Some(token) = self.controllers.remove(id) {
             token.cancel();
         }
 
-        if let Some(task) = self.tasks.iter_mut().find(|t| t.id == id) {
-            task.status = TaskStatus::Cancelled;
-            task.logs.push(create_log("任务已取消。", "warn"));
-            task.updated_at = chrono::Utc::now().to_rfc3339();
-        }
-
-        self.persist().await;
-        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
-        self.tasks.iter().find(|t| t.id == id).cloned()
+        let result = {
+            let mut tasks = self.tasks.lock().await;
+            if let Some(task) = tasks.iter_mut().find(|t| t.id == id) {
+                task.status = TaskStatus::Cancelled;
+                task.logs.push(create_log("任务已取消。", "warn"));
+                task.updated_at = chrono::Utc::now().to_rfc3339();
+            }
+            tasks.iter().find(|t| t.id == id).cloned()
+        };
+        let _ = self.update_tx.send(TaskUpdate::PersistAndEmit);
+        result
     }
 
     pub async fn remove_task(&mut self, id: &str) -> AppResult<Vec<ManagedTask>> {
-        if !self.tasks.iter().any(|t| t.id == id) {
-            return Ok(self.tasks.clone());
+        let exists = {
+            let tasks = self.tasks.lock().await;
+            tasks.iter().any(|t| t.id == id)
+        };
+        if !exists {
+            return Ok(self.tasks.lock().await.clone());
         }
-        if self.tasks.iter().any(|t| t.id == id && is_active(t)) {
+
+        let is_task_active = {
+            let tasks = self.tasks.lock().await;
+            tasks.iter().any(|t| t.id == id && is_active(t))
+        };
+        if is_task_active {
             return Err(AppError::Message("进行中的任务不能移除，请先取消任务。".to_string()));
         }
-        self.tasks.retain(|t| t.id != id);
-        self.persist().await;
-        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
-        Ok(self.tasks.clone())
+
+        {
+            let mut tasks = self.tasks.lock().await;
+            tasks.retain(|t| t.id != id);
+        }
+        let _ = self.update_tx.send(TaskUpdate::PersistAndEmit);
+        Ok(self.tasks.lock().await.clone())
     }
 
     pub async fn clear_finished(&mut self) -> Vec<ManagedTask> {
-        self.tasks.retain(|t| is_active(t));
-        self.persist().await;
-        let _ = self.app_handle.emit("tasks:changed", &self.tasks);
-        self.tasks.clone()
+        {
+            let mut tasks = self.tasks.lock().await;
+            tasks.retain(|t| is_active(t));
+        }
+        let _ = self.update_tx.send(TaskUpdate::PersistAndEmit);
+        self.tasks.lock().await.clone()
     }
 
     // ── Internal ─────────────────────────────────────────────────────────
-
-    async fn persist(&self) {
-        let data = TaskData { tasks: self.tasks.clone() };
-        let _ = self.store.write(&data).await;
-    }
 
     fn start_install_task(&mut self, id: &str, input: InstallTaskInput) {
         let cancel = CancellationToken::new();
@@ -398,7 +421,7 @@ impl TaskService {
                     {
                         let env_rec = env_record.lock().await;
                         if let Ok(summary) = env_rec.get_summary().await {
-                            let _ = app_handle.emit("environment:changed", &summary);
+                            let _ = app_handle.emit("environments:changed", &summary);
                         }
                     }
 
