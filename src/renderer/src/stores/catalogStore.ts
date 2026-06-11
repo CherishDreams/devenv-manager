@@ -1,5 +1,6 @@
 import type { AvailableVersion, EnvironmentKind, VersionCatalogQuery } from "@shared/types";
 import { getErrorMessage } from "@shared/errorUtils";
+import { getStaticVersions } from "@shared/versionCatalog";
 import { create } from "zustand";
 import { envManagerApi } from "../api/envManagerApi";
 
@@ -52,6 +53,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       }));
       return versions;
     } catch (error) {
+      const fallback = getStaticVersions(query);
+      if (fallback.length > 0) {
+        const fallbackVersions = fallback.map((v) => ({
+          ...v,
+          notes: `在线获取失败，已使用内置目录：${getErrorMessage(error)}`,
+        }));
+        set((state) => ({
+          versionsByKey: { ...state.versionsByKey, [key]: fallbackVersions },
+          loadingByKey: { ...state.loadingByKey, [key]: false },
+        }));
+        return fallbackVersions;
+      }
+
       console.error("[catalogStore] Failed to load versions:", error);
       set((state) => ({
         loadingByKey: {

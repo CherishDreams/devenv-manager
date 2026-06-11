@@ -1,4 +1,4 @@
-import type { AvailableVersion, EnvironmentKind } from "./types";
+import type { AvailableVersion, EnvironmentKind, VersionCatalogQuery } from "./types";
 import { androidVersionCatalog } from "./versionCatalogs/android";
 import { cmakeVersionCatalog } from "./versionCatalogs/cmake";
 import { condaVersionCatalog } from "./versionCatalogs/conda";
@@ -50,3 +50,7 @@ export const versionCatalog: VersionCatalog = {
   redis: redisVersionCatalog,
   sqlite: sqliteVersionCatalog,
 };
+
+export function getStaticVersions(query: VersionCatalogQuery): AvailableVersion[] {
+  return versionCatalog[query.environment]?.[query.vendor] ?? [];
+}

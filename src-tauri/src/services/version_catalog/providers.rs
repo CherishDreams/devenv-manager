@@ -368,6 +368,84 @@ pub async fn list_conda_versions(vendor: &str, config: &AppConfig) -> AppResult<
     }
 }
 
+// ── C++ (LLVM-MinGW) ────────────────────────────────────────────────────────
+
+pub async fn list_cpp_versions(vendor: &str, config: &AppConfig) -> AppResult<Vec<AvailableVersion>> {
+    match vendor {
+        "llvm-mingw" => {
+            let releases = fetch_json::<Vec<GitHubRelease>>(
+                "https://api.github.com/repos/mstorsjo/llvm-mingw/releases?per_page=40",
+                config,
+            ).await?;
+
+            Ok(releases.iter()
+                .filter(|r| !r.draft && !r.prerelease)
+                .filter(|r| r.assets.iter().any(|a| {
+                    regex_lite::Regex::new(r"^llvm-mingw-\d+-ucrt-x86_64\.zip$")
+                        .map(|re| re.is_match(&a.name))
+                        .unwrap_or(false)
+                }))
+                .take(MAX_VERSION_OPTIONS)
+                .map(|r| create_version(
+                    EnvironmentKind::Cpp, "llvm-mingw", &r.tag_name,
+                    &format!("LLVM-MinGW {}", r.tag_name), "stable", "archive",
+                    Some("来自 LLVM-MinGW GitHub Releases API"),
+                ))
+                .collect())
+        }
+        _ => Ok(vec![]),
+    }
+}
+
+// ── Lua ─────────────────────────────────────────────────────────────────────
+
+pub async fn list_lua_versions(vendor: &str, config: &AppConfig) -> AppResult<Vec<AvailableVersion>> {
+    match vendor {
+        "luabinaries" => {
+            let releases = fetch_json::<Vec<GitHubRelease>>(
+                "https://api.github.com/repos/lua/lua/releases?per_page=40",
+                config,
+            ).await?;
+
+            let mut versions: Vec<String> = releases.iter()
+                .filter(|r| !r.draft && !r.prerelease)
+                .map(|r| r.tag_name.trim_start_matches('v').to_string())
+                .filter(|v| regex_lite::Regex::new(r"^\d+\.\d+\.\d+$").map(|re| re.is_match(v)).unwrap_or(false))
+                .collect();
+            versions = unique(&versions);
+            versions.sort_by(|a, b| compare_versions_desc(a, b));
+
+            Ok(versions.into_iter()
+                .take(MAX_VERSION_OPTIONS)
+                .enumerate()
+                .map(|(index, version)| create_version(
+                    EnvironmentKind::Lua, "luabinaries", &version,
+                    &format!("Lua {}", version),
+                    if index == 0 { "current" } else { "stable" },
+                    "archive",
+                    Some("版本来自 Lua GitHub Releases，Windows 包来自 LuaBinaries"),
+                ))
+                .collect())
+        }
+        _ => Ok(vec![]),
+    }
+}
+
+// ── Rust (rustup) ───────────────────────────────────────────────────────────
+
+pub async fn list_rust_versions(vendor: &str, _config: &AppConfig) -> AppResult<Vec<AvailableVersion>> {
+    match vendor {
+        "rustup" => {
+            Ok(vec![
+                create_version(EnvironmentKind::Rust, "rustup", "stable", "Rust stable", "stable", "installer", Some("由 rustup 安装稳定工具链")),
+                create_version(EnvironmentKind::Rust, "rustup", "beta", "Rust beta", "current", "installer", Some("由 rustup 安装 beta 工具链")),
+                create_version(EnvironmentKind::Rust, "rustup", "nightly", "Rust nightly", "current", "installer", Some("由 rustup 安装 nightly 工具链")),
+            ])
+        }
+        _ => Ok(vec![]),
+    }
+}
+
 // ── Simple regex helper ──────────────────────────────────────────────────────
 
 fn regex_matches(text: &str, pattern: &str) -> Vec<String> {
