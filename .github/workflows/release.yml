@@ -71,9 +71,9 @@ jobs:
           cp "src-tauri/target/release/bundle/nsis/DevEnvManager_${BUILD_VERSION}_x64-setup.exe" \
             "release-assets/DevEnvManager-${TAG_VERSION}-x64-setup.exe"
 
-          # Portable: zip the standalone exe
-          7z a "release-assets/DevEnvManager-${TAG_VERSION}-x64-portable.zip" \
-            src-tauri/target/release/env-manager.exe
+          # Portable: zip the standalone exe (-ep strips all directory paths from archive)
+          7z a -ep "release-assets/DevEnvManager-${TAG_VERSION}-x64-portable.zip" \
+            "src-tauri/target/release/env-manager.exe"
 
           echo "Release assets prepared:"
           ls -la release-assets/
