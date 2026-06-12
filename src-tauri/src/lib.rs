@@ -75,6 +75,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::config_get,
             commands::config_update,
+            commands::config_switch_env_scope,
             commands::system_get_status,
             commands::dialog_select_directory,
             commands::environments_get_summary,

@@ -825,6 +825,18 @@ body.theme-vibrant::after {
   border-bottom: 1px solid var(--glass-border);
 }
 
+.task-log-modal .ant-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+  margin-top: 4px;
+}
+
+.task-log-modal .ant-pagination li {
+  margin-inline-start: 0 !important;
+}
+
 .ant-card {
   border-color: var(--glass-border) !important;
   background: var(--glass-bg) !important;

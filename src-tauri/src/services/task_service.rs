@@ -253,6 +253,7 @@ impl TaskService {
                 task.progress = 0.0;
                 task.download = None;
                 task.updated_at = now;
+                task.logs.clear();
                 task.logs.push(create_log("任务已重新加入队列，等待执行。", "info"));
             }
             tasks.iter().find(|t| t.id == id)

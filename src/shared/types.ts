@@ -29,6 +29,8 @@ export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancel
 
 export type EnvironmentManagementMode = "symlink" | "direct";
 
+export type EnvironmentVariableScope = "user" | "system";
+
 export type EnvironmentOwnership = "managed" | "adopted" | "external";
 
 export type UninstallPolicy = "delete-directory" | "remove-record-only" | "manual";
@@ -43,6 +45,7 @@ export type EnvironmentGroup = "编程语言" | "Python" | "JavaScript" | "构�
 
 export interface EnvironmentManagementSettings {
   mode: EnvironmentManagementMode;
+  envScope: EnvironmentVariableScope;
 }
 
 export interface AppearanceSettings {

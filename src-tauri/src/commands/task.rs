@@ -94,48 +94,38 @@ pub async fn permissions_check(
         _ => None,
     };
 
-    // Check if service elevation is needed
+    // Check if service elevation is needed (only database service registration requires admin)
     let needs_service_elevation = install_input
         .as_ref()
         .and_then(|i| i.database_config.as_ref())
         .is_some_and(|db| db.enabled && db.install_as_service);
 
-    // Check if this is an environment write operation
-    let environment_write = matches!(
-        &input,
-        PrivilegeCheckInput::SetActive { .. } | PrivilegeCheckInput::Uninstall { .. }
-    ) || install_input
-        .as_ref()
-        .is_some_and(|i| i.configure_system_env);
+    // When env_scope is "system", writing env vars requires admin.
+    let env_scope = &app_config.environment_management.env_scope;
+    let needs_env_elevation = env_scope == "system";
 
-    // Check if mode is "direct"
-    let is_direct_mode = app_config.environment_management.mode == "direct";
-
-    // Determine if admin is required
-    let required = !status.is_administrator
-        && (needs_service_elevation || (environment_write && is_direct_mode));
+    let required = !status.is_administrator && (needs_service_elevation || needs_env_elevation);
 
     let reason = if needs_service_elevation {
         "注册数据库 Windows 系统服务需要管理员权限。"
+    } else if needs_env_elevation {
+        "环境变量写入系统级注册表 (HKLM) 需要管理员权限。"
     } else {
-        "当前操作需要更新系统环境变量。"
+        ""
     }
     .to_string();
 
-    let can_switch_to_symlink = required
-        && !needs_service_elevation
-        && is_direct_mode
-        && !matches!(&input, PrivilegeCheckInput::Uninstall { .. });
+    // No longer applicable since env vars are written to HKCU by default.
+    let can_switch_to_symlink = false;
 
     let authorization_mode = if !required {
         AuthorizationMode::None
-    } else if matches!(&input, PrivilegeCheckInput::Install { .. } | PrivilegeCheckInput::Retry { .. }) {
-        AuthorizationMode::RestartApp
     } else {
-        AuthorizationMode::ElevatedHelper
+        AuthorizationMode::RestartApp
     };
 
     // Convert mode string to enum
+    let is_direct_mode = app_config.environment_management.mode == "direct";
     let current_mode = if is_direct_mode {
         EnvironmentManagementMode::Direct
     } else {

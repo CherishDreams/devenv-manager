@@ -1,9 +1,11 @@
-//! Windows machine-level environment variable registry operations.
+//! Scope-aware Windows environment variable registry operations.
 //!
-//! Translates the TypeScript `registryEnvironment.ts` to use the `winreg` crate
-//! instead of spawning `reg.exe` processes.  All blocking registry calls are
-//! dispatched through `tokio::task::spawn_blocking` so the async runtime is
-//! never stalled.
+//! Uses the `winreg` crate to read/write environment variables in either
+//! `HKEY_CURRENT_USER\Environment` (user scope) or
+//! `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment`
+//! (system scope).
+//! All blocking registry calls are dispatched through
+//! `tokio::task::spawn_blocking` so the async runtime is never stalled.
 
 #![allow(dead_code)]
 
@@ -19,8 +21,27 @@ use crate::shared::types::{EnvironmentApplyPlan, EnvironmentCleanupPlan};
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const MACHINE_ENV_KEY: &str =
-    "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
+const USER_ENV_KEY: &str = "Environment";
+const SYSTEM_ENV_KEY: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+
+// ── Scope resolution ─────────────────────────────────────────────────────────
+
+/// Returns `(hive, subkey_path)` for the given scope string.
+/// Defaults to user scope for any unrecognised value.
+fn resolve_scope(scope: &str) -> (winreg::HKEY, &'static str) {
+    match scope {
+        "system" => (HKEY_LOCAL_MACHINE, SYSTEM_ENV_KEY),
+        _ => (HKEY_CURRENT_USER, USER_ENV_KEY),
+    }
+}
+
+/// Returns the registry path string used by `reg.exe` for backup/restore.
+fn scope_reg_path(scope: &str) -> &'static str {
+    match scope {
+        "system" => r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        _ => "HKCU\\Environment",
+    }
+}
 
 // ── Helper functions ─────────────────────────────────────────────────────────
 
@@ -81,19 +102,21 @@ fn decode_reg_value_utf16le(bytes: &[u16]) -> String {
 
 // ── Core registry operations (blocking, dispatched via spawn_blocking) ───────
 
-/// Read multiple named values from the machine environment registry key.
+/// Read multiple named values from the environment registry key at the given scope.
 ///
 /// Returns a map of `name -> Option<String>`.  A value of `None` means the
 /// entry does not exist or could not be decoded.  If the key itself cannot be
 /// opened every value maps to `None`.
-async fn read_machine_env_values(
+async fn read_env_values(
+    scope: &str,
     names: &[&str],
 ) -> AppResult<HashMap<String, Option<String>>> {
+    let (hive, subkey) = resolve_scope(scope);
     let owned: Vec<String> = names.iter().map(|s| (*s).to_string()).collect();
 
     tokio::task::spawn_blocking(move || {
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        let key = match hklm.open_subkey_with_flags(MACHINE_ENV_KEY, KEY_READ) {
+        let root = RegKey::predef(hive);
+        let key = match root.open_subkey_with_flags(subkey, KEY_READ) {
             Ok(k) => k,
             Err(_) => {
                 // Key not found or access denied – return all None.
@@ -126,22 +149,23 @@ async fn read_machine_env_values(
     .map_err(|e| AppError::Message(format!("spawn_blocking join error: {e}")))
 }
 
-/// Write a single named value to the machine environment registry key.
+/// Write a single named value to the environment registry key at the given scope.
 ///
 /// When `is_expand` is `true` the value is stored as `REG_EXPAND_SZ` so that
 /// `%VAR%` references are preserved; otherwise it is stored as `REG_SZ`.
-async fn write_machine_env_value(
+async fn write_env_value(
+    scope: &str,
     name: &str,
     value: &str,
     is_expand: bool,
 ) -> AppResult<()> {
+    let (hive, subkey) = resolve_scope(scope);
     let name = name.to_string();
     let value = value.to_string();
 
     tokio::task::spawn_blocking(move || {
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        let key =
-            hklm.open_subkey_with_flags(MACHINE_ENV_KEY, KEY_WRITE)?;
+        let root = RegKey::predef(hive);
+        let key = root.open_subkey_with_flags(subkey, KEY_WRITE)?;
 
         if is_expand {
             // Build a NUL-terminated UTF-16LE payload for REG_EXPAND_SZ.
@@ -164,14 +188,14 @@ async fn write_machine_env_value(
     .map_err(|e| AppError::Message(format!("spawn_blocking join error: {e}")))?
 }
 
-/// Delete a single named value from the machine environment registry key.
-async fn delete_machine_env_value(name: &str) -> AppResult<()> {
+/// Delete a single named value from the environment registry key at the given scope.
+async fn delete_env_value(scope: &str, name: &str) -> AppResult<()> {
+    let (hive, subkey) = resolve_scope(scope);
     let name = name.to_string();
 
     tokio::task::spawn_blocking(move || {
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        let key =
-            hklm.open_subkey_with_flags(MACHINE_ENV_KEY, KEY_WRITE)?;
+        let root = RegKey::predef(hive);
+        let key = root.open_subkey_with_flags(subkey, KEY_WRITE)?;
         key.delete_value(&name)?;
         Ok(())
     })
@@ -179,9 +203,9 @@ async fn delete_machine_env_value(name: &str) -> AppResult<()> {
     .map_err(|e| AppError::Message(format!("spawn_blocking join error: {e}")))?
 }
 
-/// Create a timestamped backup of the machine environment registry key using
-/// `reg.exe export`.
-async fn backup_registry(app_handle: &AppHandle) -> AppResult<()> {
+/// Create a timestamped backup of the environment registry key at the given scope
+/// using `reg.exe export`.
+async fn backup_registry(app_handle: &AppHandle, scope: &str) -> AppResult<()> {
     let backup_dir = app_handle
         .path()
         .resolve("registry-backups", BaseDirectory::AppData)?;
@@ -190,15 +214,17 @@ async fn backup_registry(app_handle: &AppHandle) -> AppResult<()> {
     tokio::fs::create_dir_all(&backup_dir).await?;
 
     let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let file_path = backup_dir.join(format!("environment-{timestamp}.reg"));
+    let scope_label = if scope == "system" { "system" } else { "user" };
+    let file_path = backup_dir.join(format!("environment-{scope_label}-{timestamp}.reg"));
     let file_str = file_path
         .to_string_lossy()
         .to_string();
+    let reg_path = scope_reg_path(scope);
 
     let status = tokio::process::Command::new("reg")
         .args([
             "export",
-            &format!("\"HKLM\\{MACHINE_ENV_KEY}\""),
+            &format!("\"{reg_path}\""),
             &file_str,
             "/y",
         ])
@@ -215,14 +241,17 @@ async fn backup_registry(app_handle: &AppHandle) -> AppResult<()> {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/// Check whether applying `plan` would actually change any machine-level
-/// registry values.
-pub async fn registry_needs_update(plan: &EnvironmentApplyPlan) -> AppResult<bool> {
+/// Check whether applying `plan` would actually change any registry values
+/// at the given scope.
+pub async fn registry_needs_update(
+    scope: &str,
+    plan: &EnvironmentApplyPlan,
+) -> AppResult<bool> {
     let keys: Vec<&str> = plan.env_vars.keys().map(|k| k.as_str()).collect();
     let mut names: Vec<&str> = keys.clone();
     names.push("Path");
 
-    let current = read_machine_env_values(&names).await?;
+    let current = read_env_values(scope, &names).await?;
 
     // Compare each env_var value.
     for (name, desired) in &plan.env_vars {
@@ -250,15 +279,16 @@ pub async fn registry_needs_update(plan: &EnvironmentApplyPlan) -> AppResult<boo
 }
 
 /// Check whether any of the environment values described by `plan` are
-/// currently present in the registry (and therefore need removal).
+/// currently present in the registry at the given scope (and therefore need removal).
 pub async fn registry_needs_cleanup(
+    scope: &str,
     plan: &EnvironmentCleanupPlan,
 ) -> AppResult<bool> {
     let keys: Vec<&str> = plan.env_vars.keys().map(|k| k.as_str()).collect();
     let mut names: Vec<&str> = keys.clone();
     names.push("Path");
 
-    let current = read_machine_env_values(&names).await?;
+    let current = read_env_values(scope, &names).await?;
 
     // If any env_var currently matches, cleanup is needed.
     for (name, value) in &plan.env_vars {
@@ -282,7 +312,7 @@ pub async fn registry_needs_cleanup(
     Ok(false)
 }
 
-/// Apply an [`EnvironmentApplyPlan`] to the machine environment registry.
+/// Apply an [`EnvironmentApplyPlan`] to the environment registry at the given scope.
 ///
 /// 1. Reads current values.
 /// 2. Determines which values need writing (changed env_vars + updated Path).
@@ -291,13 +321,14 @@ pub async fn registry_needs_cleanup(
 /// 5. Updates the current process environment to match.
 pub async fn apply_registry_plan(
     app_handle: &AppHandle,
+    scope: &str,
     plan: &EnvironmentApplyPlan,
 ) -> AppResult<()> {
     let keys: Vec<&str> = plan.env_vars.keys().map(|k| k.as_str()).collect();
     let mut names: Vec<&str> = keys.clone();
     names.push("Path");
 
-    let current = read_machine_env_values(&names).await?;
+    let current = read_env_values(scope, &names).await?;
 
     // Build list of (name, Option<value>) writes to perform.
     let mut writes: Vec<(String, Option<String>)> = Vec::new();
@@ -328,7 +359,7 @@ pub async fn apply_registry_plan(
     }
 
     // Backup before mutating.
-    backup_registry(app_handle).await?;
+    backup_registry(app_handle, scope).await?;
 
     // Execute all writes.
     for (name, value) in &writes {
@@ -336,10 +367,10 @@ pub async fn apply_registry_plan(
             Some(v) => {
                 // Use REG_EXPAND_SZ when the value contains %VAR% references.
                 let is_expand = v.contains('%');
-                write_machine_env_value(name, v, is_expand).await?;
+                write_env_value(scope, name, v, is_expand).await?;
             }
             None => {
-                delete_machine_env_value(name).await?;
+                delete_env_value(scope, name).await?;
             }
         }
     }
@@ -365,7 +396,7 @@ pub async fn apply_registry_plan(
     Ok(())
 }
 
-/// Apply an [`EnvironmentCleanupPlan`] to the machine environment registry.
+/// Apply an [`EnvironmentCleanupPlan`] to the environment registry at the given scope.
 ///
 /// 1. Reads current values.
 /// 2. Determines which env_vars match (and therefore need deletion).
@@ -375,13 +406,14 @@ pub async fn apply_registry_plan(
 /// 6. Cleans the current process environment.
 pub async fn cleanup_registry_plan(
     app_handle: &AppHandle,
+    scope: &str,
     plan: &EnvironmentCleanupPlan,
 ) -> AppResult<()> {
     let keys: Vec<&str> = plan.env_vars.keys().map(|k| k.as_str()).collect();
     let mut names: Vec<&str> = keys.clone();
     names.push("Path");
 
-    let current = read_machine_env_values(&names).await?;
+    let current = read_env_values(scope, &names).await?;
 
     // Determine which env_vars currently match and need deletion.
     let mut deletes: Vec<String> = Vec::new();
@@ -406,16 +438,16 @@ pub async fn cleanup_registry_plan(
     }
 
     // Backup before mutating.
-    backup_registry(app_handle).await?;
+    backup_registry(app_handle, scope).await?;
 
     // Delete matching env vars.
     for name in &deletes {
-        delete_machine_env_value(name).await?;
+        delete_env_value(scope, name).await?;
     }
 
     // Write updated Path if it changed.
     if path_changed {
-        write_machine_env_value("Path", &new_path, new_path.contains('%'))
+        write_env_value(scope, "Path", &new_path, new_path.contains('%'))
             .await?;
     }
 
@@ -442,17 +474,85 @@ pub async fn cleanup_registry_plan(
     Ok(())
 }
 
-/// Synchronize the current process environment with the machine registry
-/// values for the given variable `names`.
+/// Remove all app-managed environment variable values and PATH entries from
+/// the specified scope.  Used during scope migration to clean up the old location.
+pub async fn cleanup_scope(
+    app_handle: &AppHandle,
+    scope: &str,
+    env_var_names: &[String],
+    path_entries: &[String],
+) -> AppResult<()> {
+    let mut names: Vec<&str> = env_var_names.iter().map(|s| s.as_str()).collect();
+    names.push("Path");
+
+    let current = read_env_values(scope, &names).await?;
+
+    // Collect env vars that exist at this scope and need deletion.
+    let mut deletes: Vec<String> = Vec::new();
+    for name in env_var_names {
+        if current.get(name.as_str()).and_then(|v| v.as_ref()).is_some() {
+            deletes.push(name.clone());
+        }
+    }
+
+    // Calculate new Path after removing entries.
+    let cur_path = current
+        .get("Path")
+        .and_then(|v| v.as_ref())
+        .map(|s| s.as_str());
+    let new_path = update_path_value(cur_path, path_entries, &[]);
+    let path_changed = cur_path.unwrap_or("") != new_path;
+
+    if deletes.is_empty() && !path_changed {
+        return Ok(());
+    }
+
+    // Backup before mutating.
+    backup_registry(app_handle, scope).await?;
+
+    // Delete env vars.
+    for name in &deletes {
+        delete_env_value(scope, name).await?;
+    }
+
+    // Write updated Path if it changed.
+    if path_changed {
+        write_env_value(scope, "Path", &new_path, new_path.contains('%'))
+            .await?;
+    }
+
+    // Sync process environment.
+    for name in &deletes {
+        unsafe { std::env::remove_var(name); }
+    }
+    if path_changed {
+        let path_key = if std::env::var("Path").is_err()
+            && std::env::var("PATH").is_ok()
+        {
+            "PATH"
+        } else {
+            "Path"
+        };
+        unsafe { std::env::set_var(path_key, &new_path); }
+    }
+
+    Ok(())
+}
+
+/// Synchronize the current process environment with the registry
+/// values for the given variable `names` at the specified scope.
 ///
 /// For each name the current registry value is read; if present it is set in
 /// the process, if absent it is removed.  The `Path` / `PATH` variable is
 /// handled specially to preserve the casing used by the process.
-pub async fn synchronize_process_env(names: &[String]) -> AppResult<()> {
+pub async fn synchronize_process_env(
+    scope: &str,
+    names: &[String],
+) -> AppResult<()> {
     let mut refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
     refs.push("Path");
 
-    let current = read_machine_env_values(&refs).await?;
+    let current = read_env_values(scope, &refs).await?;
 
     // SAFETY: These calls occur within the process-environment sync path on Windows.
     // The Windows API for environment variables is thread-safe, and no other

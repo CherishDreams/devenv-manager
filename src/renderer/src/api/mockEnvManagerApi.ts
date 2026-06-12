@@ -25,6 +25,7 @@ const mockConfig: AppConfig = {
   },
   environmentManagement: {
     mode: "symlink",
+    envScope: "user",
   },
   proxy: {
     enabled: false,
@@ -308,6 +309,15 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
         };
         return config;
       },
+      switchEnvScope: async (scope: string) => {
+        config = {
+          ...config,
+          environmentManagement: {
+            ...config.environmentManagement,
+            envScope: scope as "user" | "system",
+          },
+        };
+      },
     },
     system: {
       getStatus: async () => mockSystemStatus,
@@ -320,33 +330,28 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
             : input.type === "retry"
               ? tasks.find((task) => task.id === input.id)?.input
               : undefined;
+        // Database Windows service registration requires admin.
         const needsServiceElevation = Boolean(
           installInput?.databaseConfig?.enabled && installInput.databaseConfig.installAsService,
         );
-        const environmentWrite =
-          input.type === "set-active" || input.type === "uninstall" || Boolean(installInput?.configureSystemEnv);
-        const required =
-          !mockSystemStatus.isAdministrator &&
-          (needsServiceElevation || (environmentWrite && config.environmentManagement.mode === "direct"));
+        // System scope env writes require admin.
+        const needsEnvElevation = config.environmentManagement.envScope === "system";
+        const required = !mockSystemStatus.isAdministrator && (needsServiceElevation || needsEnvElevation);
+
+        let reason = "";
+        if (needsServiceElevation) {
+          reason = "注册数据库 Windows 系统服务需要管理员权限。";
+        } else if (needsEnvElevation) {
+          reason = "环境变量写入系统级注册表 (HKLM) 需要管理员权限。";
+        }
 
         return {
           required,
           authorized: false,
-          reason: needsServiceElevation
-            ? "注册数据库 Windows 系统服务需要管理员权限。"
-            : "当前操作需要更新系统环境变量。",
-          canSwitchToSymlink:
-            required &&
-            !needsServiceElevation &&
-            config.environmentManagement.mode === "direct" &&
-            input.type !== "uninstall",
+          reason,
+          canSwitchToSymlink: false,
           currentMode: config.environmentManagement.mode,
-          authorizationMode:
-            required && (input.type === "install" || input.type === "retry")
-              ? "restart-app"
-              : required
-                ? "elevated-helper"
-                : "none",
+          authorizationMode: required ? "restart-app" : "none",
         };
       },
     },
@@ -465,7 +470,6 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
           download: undefined,
           updatedAt: now,
           logs: [
-            ...task.logs,
             {
               at: now,
               level: "info" as const,

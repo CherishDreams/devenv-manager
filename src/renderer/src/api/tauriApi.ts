@@ -26,6 +26,7 @@ export const tauriApi = {
   config: {
     get: () => invoke<AppConfig>("config_get"),
     update: (patch: Partial<AppConfig>) => invoke<AppConfig>("config_update", { patch }),
+    switchEnvScope: (scope: string) => invoke<void>("config_switch_env_scope", { scope }),
   },
   system: {
     getStatus: () => invoke<SystemStatus>("system_get_status"),

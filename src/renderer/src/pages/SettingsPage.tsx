@@ -1,4 +1,4 @@
-import type { AppConfig, NavigationLayout } from "@shared/types";
+import type { AppConfig, EnvironmentVariableScope, NavigationLayout } from "@shared/types";
 import type React from "react";
 import type { ThemeStyle } from "../theme/themeDefinitions";
 import {
@@ -115,8 +115,26 @@ export function SettingsPage(): React.ReactElement {
 
   const save = async (): Promise<void> => {
     await form.validateFields();
-    await update(form.getFieldsValue(true) as Partial<AppConfig>);
-    message.success("设置已保存");
+    const values = form.getFieldsValue(true) as Partial<AppConfig>;
+    const newScope = values.environmentManagement?.envScope;
+    const oldScope = config?.environmentManagement?.envScope;
+
+    // If scope changed, use the dedicated migration API.
+    if (newScope && oldScope && newScope !== oldScope) {
+      await envManagerApi.config.switchEnvScope(newScope);
+      // Update config store to reflect the change.
+      await update({
+        ...values,
+        environmentManagement: {
+          ...values.environmentManagement!,
+          envScope: newScope as EnvironmentVariableScope,
+        },
+      });
+      message.success("环境变量写入位置已切换，已有变量已迁移");
+    } else {
+      await update(values);
+      message.success("设置已保存");
+    }
   };
 
   const updateNavigationLayout = async (value: NavigationLayout): Promise<void> => {
@@ -300,6 +318,18 @@ export function SettingsPage(): React.ReactElement {
             <Radio.Group optionType="button" buttonStyle="solid">
               <Radio.Button value="symlink">软件软链接</Radio.Button>
               <Radio.Button value="direct">直接指向</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+        }
+      />
+      <SettingsRow
+        title="环境变量写入位置"
+        description="切换后保存时将自动迁移已有环境变量"
+        control={
+          <Form.Item name={["environmentManagement", "envScope"]} noStyle>
+            <Radio.Group optionType="button" buttonStyle="solid">
+              <Radio.Button value="user">用户级</Radio.Button>
+              <Radio.Button value="system">系统级</Radio.Button>
             </Radio.Group>
           </Form.Item>
         }

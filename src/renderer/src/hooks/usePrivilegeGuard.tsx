@@ -1,11 +1,10 @@
 import type { PrivilegeCheckInput, PrivilegeRequirement } from "@shared/types";
-import { LinkOutlined, SafetyCertificateOutlined, WarningOutlined } from "@ant-design/icons";
-import { Alert, App as AntdApp, Button, Space, Typography } from "antd";
+import { SafetyCertificateOutlined, WarningOutlined } from "@ant-design/icons";
+import { Alert, App as AntdApp, Space, Typography } from "antd";
 import { useCallback } from "react";
 import { envManagerApi } from "../api/envManagerApi";
-import { useConfigStore } from "../stores/configStore";
 
-type PrivilegeChoice = "authorize" | "symlink" | "cancel";
+type PrivilegeChoice = "authorize" | "cancel";
 type RuntimeApi = typeof envManagerApi;
 
 async function checkPrivilegeRequirement(input: PrivilegeCheckInput): Promise<PrivilegeRequirement> {
@@ -15,6 +14,10 @@ async function checkPrivilegeRequirement(input: PrivilegeCheckInput): Promise<Pr
     return permissions.check(input);
   }
 
+  // Fallback for mock/browser mode.
+  // Environment variable writes go to HKCU by default (no admin needed).
+  // Only database Windows service registration needs elevation.
+  // When envScope is "system", env writes go to HKLM and need admin.
   const [status, config] = await Promise.all([envManagerApi.system.getStatus(), envManagerApi.config.get()]);
 
   if (status.isAdministrator) {
@@ -32,23 +35,24 @@ async function checkPrivilegeRequirement(input: PrivilegeCheckInput): Promise<Pr
   const needsServiceElevation = Boolean(
     installInput?.databaseConfig?.enabled && installInput.databaseConfig.installAsService,
   );
-  const canSwitchToSymlink =
-    config.environmentManagement.mode === "direct" &&
-    !needsServiceElevation &&
-    (input.type === "set-active" || input.type === "install" || input.type === "retry");
+  const needsEnvElevation = config.environmentManagement.envScope === "system";
+  const required = needsServiceElevation || needsEnvElevation;
+
+  let reason = "";
+  if (needsServiceElevation) {
+    reason = "注册数据库 Windows 系统服务需要管理员权限。";
+  } else if (needsEnvElevation) {
+    reason = "环境变量写入系统级注册表 (HKLM) 需要管理员权限。";
+  }
 
   return {
-    required: true,
+    required,
     authorized: false,
-    reason: needsServiceElevation ? "注册数据库 Windows 系统服务需要管理员权限。" : "当前操作需要更新系统环境变量。",
-    canSwitchToSymlink,
+    reason,
+    canSwitchToSymlink: false,
     currentMode: config.environmentManagement.mode,
-    authorizationMode: "restart-app",
+    authorizationMode: required ? "restart-app" : "none",
   };
-}
-
-function getAuthorizationLabel(requirement: PrivilegeRequirement): string {
-  return requirement.authorizationMode === "restart-app" ? "授权并重启" : "授权并继续";
 }
 
 export function usePrivilegeGuard(): {
@@ -57,8 +61,7 @@ export function usePrivilegeGuard(): {
     action: (authorized: boolean) => Promise<T>,
   ) => Promise<T | undefined>;
 } {
-  const { message, modal } = AntdApp.useApp();
-  const updateConfig = useConfigStore((state) => state.update);
+  const { modal } = AntdApp.useApp();
 
   const promptForPrivilege = useCallback(
     (requirement: PrivilegeRequirement): Promise<PrivilegeChoice> =>
@@ -84,18 +87,11 @@ export function usePrivilegeGuard(): {
             <Space direction="vertical" size={12} className="full-width">
               <Alert type="warning" showIcon message={requirement.reason} />
               <Typography.Text type="secondary">
-                {requirement.authorizationMode === "restart-app"
-                  ? "授权后应用会以管理员身份重启，并自动继续创建任务。"
-                  : "授权后会启动或复用管理员辅助进程，当前应用窗口不会重启，本次应用会话内后续同类操作不再重复授权。"}
+                授权后应用会以管理员身份重启，并自动继续创建任务。
               </Typography.Text>
-              {requirement.canSwitchToSymlink ? (
-                <Button icon={<LinkOutlined />} onClick={() => finish("symlink")}>
-                  切换为软件软链接
-                </Button>
-              ) : null}
             </Space>
           ),
-          okText: getAuthorizationLabel(requirement),
+          okText: "授权并重启",
           okButtonProps: { icon: <SafetyCertificateOutlined /> },
           cancelText: "取消",
           onOk: () => finish("authorize"),
@@ -107,37 +103,25 @@ export function usePrivilegeGuard(): {
 
   const runWithPrivilege = useCallback(
     async <T,>(input: PrivilegeCheckInput, action: (authorized: boolean) => Promise<T>): Promise<T | undefined> => {
-      while (true) {
-        const requirement = await checkPrivilegeRequirement(input);
+      const requirement = await checkPrivilegeRequirement(input);
 
-        if (!requirement.required) {
-          return action(false);
-        }
+      if (!requirement.required) {
+        return action(false);
+      }
 
-        if (requirement.authorized) {
-          return action(true);
-        }
-
-        const choice = await promptForPrivilege(requirement);
-
-        if (choice === "cancel") {
-          return undefined;
-        }
-
-        if (choice === "symlink") {
-          await updateConfig({
-            environmentManagement: {
-              mode: "symlink",
-            },
-          });
-          message.success("已切换为软件软链接模式，正在重新检查权限");
-          continue;
-        }
-
+      if (requirement.authorized) {
         return action(true);
       }
+
+      const choice = await promptForPrivilege(requirement);
+
+      if (choice === "cancel") {
+        return undefined;
+      }
+
+      return action(true);
     },
-    [message, promptForPrivilege, updateConfig],
+    [promptForPrivilege],
   );
 
   return { runWithPrivilege };

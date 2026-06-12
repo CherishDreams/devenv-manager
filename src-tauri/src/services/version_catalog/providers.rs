@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use serde::Deserialize;
+use futures_util::future::join_all;
 use crate::error::AppResult;
 use crate::shared::types::*;
 use crate::services::config::AppConfig;
@@ -65,6 +66,8 @@ pub async fn list_java_versions(vendor: &str, config: &AppConfig) -> AppResult<V
     match vendor {
         "temurin" => list_temurin_versions(config).await,
         "zulu" => list_zulu_versions(config).await,
+        "liberica" => list_liberica_versions(config).await,
+        "oracle" => list_oracle_versions(config).await,
         _ => Ok(vec![]), // Other vendors use static data
     }
 }
@@ -105,6 +108,17 @@ struct ZuluPackage {
     name: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct LibericaRelease {
+    #[serde(rename = "featureVersion")]
+    feature_version: i64,
+    #[serde(rename = "GA")]
+    ga: bool,
+    #[serde(rename = "packageType")]
+    package_type: String,
+    version: String,
+}
+
 async fn list_zulu_versions(config: &AppConfig) -> AppResult<Vec<AvailableVersion>> {
     let packages = fetch_json::<Vec<ZuluPackage>>(
         "https://api.azul.com/metadata/v1/zulu/packages/?os=windows&arch=x64&java_package_type=jdk&archive_type=zip&release_status=ga&availability_types=CA&page=1&page_size=1000",
@@ -133,6 +147,74 @@ async fn list_zulu_versions(config: &AppConfig) -> AppResult<Vec<AvailableVersio
                 classify_channel(major, index, &lts_majors),
                 "archive",
                 Some(&format!("最新补丁版本 {}，来自 Azul Metadata API", version_str)),
+            )
+        })
+        .collect())
+}
+
+// ── Java (Liberica) ──────────────────────────────────────────────────────────
+
+async fn list_liberica_versions(config: &AppConfig) -> AppResult<Vec<AvailableVersion>> {
+    let candidates: Vec<i64> = (4..=30).rev().collect();
+    let futures: Vec<_> = candidates.iter().map(|&major| {
+        let url = format!(
+            "https://api.bell-sw.com/v1/liberica/releases?version-feature={}&version-modifier=latest&bitness=64&release-type=all&os=windows&arch=x86&package-type=zip&bundle-type=jdk",
+            major
+        );
+        async move {
+            fetch_json::<Vec<LibericaRelease>>(&url, config).await.ok()
+                .and_then(|releases| releases.into_iter().find(|r| r.ga && r.package_type == "zip"))
+        }
+    }).collect();
+
+    let releases: Vec<LibericaRelease> = join_all(futures).await
+        .into_iter()
+        .flatten()
+        .collect();
+
+    let mut sorted = releases;
+    sorted.sort_by_key(|item| std::cmp::Reverse(item.feature_version));
+    sorted.dedup_by(|a, b| a.feature_version == b.feature_version);
+
+    let lts_majors = [21i64, 17, 11, 8];
+    Ok(sorted.into_iter()
+        .take(MAX_VERSION_OPTIONS)
+        .enumerate()
+        .map(|(index, release)| {
+            create_version(
+                EnvironmentKind::Java, "liberica", &release.feature_version.to_string(),
+                &format!("Liberica JDK {}", release.feature_version),
+                classify_channel(release.feature_version, index, &lts_majors),
+                "archive",
+                Some(&format!("最新补丁版本 {}，来自 BellSoft Product Discovery API", release.version)),
+            )
+        })
+        .collect())
+}
+
+// ── Java (Oracle) ────────────────────────────────────────────────────────────
+
+async fn list_oracle_versions(config: &AppConfig) -> AppResult<Vec<AvailableVersion>> {
+    let page = fetch_text("https://www.oracle.com/java/technologies/downloads/", config).await?;
+    let matches = regex_matches(&page, r"https://download\.oracle\.com/java/(\d+)/latest/jdk-\d+_windows-x64_bin\.zip");
+
+    let mut majors: Vec<i64> = matches.iter()
+        .filter_map(|s| s.parse::<i64>().ok())
+        .collect();
+    majors.sort_by(|a, b| b.cmp(a));
+    majors.dedup();
+
+    let lts_majors = [21i64, 17, 11, 8];
+    Ok(majors.into_iter()
+        .take(MAX_VERSION_OPTIONS)
+        .enumerate()
+        .map(|(index, major)| {
+            create_version(
+                EnvironmentKind::Java, "oracle", &major.to_string(),
+                &format!("Oracle JDK {}", major),
+                classify_channel(major, index, &lts_majors),
+                "installer",
+                Some("来自 Oracle Java 下载页"),
             )
         })
         .collect())

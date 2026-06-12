@@ -258,7 +258,7 @@ export function OperationArea({ definition }: { definition: EnvironmentDefinitio
               )}
 
               <Checkbox checked={configureSystemEnv} onChange={(event) => setConfigureSystemEnv(event.target.checked)}>
-                配置系统环境变量
+                {config?.environmentManagement?.envScope === "system" ? "配置系统环境变量（系统级）" : "配置系统环境变量（用户级）"}
               </Checkbox>
 
               {isConfigurableDatabaseEnvironment(definition.id) && databaseConfig ? (

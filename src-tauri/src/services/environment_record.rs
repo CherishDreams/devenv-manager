@@ -83,6 +83,8 @@ impl EnvironmentRecordService {
     /// Synchronize the current process' environment variables with the registry
     /// so that child processes inherit the correct values.
     pub async fn synchronize_process_env(&self) -> AppResult<()> {
+        let config = self.config_service.lock().await.get().await?;
+        let scope = config.environment_management.env_scope.clone();
         let defs = environment_definitions();
         let names: Vec<String> = unique(
             &defs
@@ -90,7 +92,7 @@ impl EnvironmentRecordService {
                 .flat_map(|d| d.env_vars.clone())
                 .collect::<Vec<_>>(),
         );
-        registry::synchronize_process_env(&names).await
+        registry::synchronize_process_env(&scope, &names).await
     }
 
     // ── Elevation checks ─────────────────────────────────────────────────
@@ -107,7 +109,8 @@ impl EnvironmentRecordService {
         let data = self.read_data().await?;
         let definition = get_definition(environment)?;
         let link_path = get_current_link_path(&config, environment);
-        registry::registry_needs_update(&EnvironmentApplyPlan {
+        let scope = config.environment_management.env_scope.as_str();
+        registry::registry_needs_update(scope, &EnvironmentApplyPlan {
             env_vars: get_env_vars(&definition, &link_path),
             add_path_entries: get_path_entries(&definition, &link_path),
             remove_path_entries: get_managed_path_entries(
@@ -134,7 +137,8 @@ impl EnvironmentRecordService {
             .cloned()
             .collect();
         let config = self.config_service.lock().await.get().await?;
-        registry::registry_needs_update(&self.create_apply_plan(&selected, &env_records, &config))
+        let scope = config.environment_management.env_scope.as_str();
+        registry::registry_needs_update(scope, &self.create_apply_plan(&selected, &env_records, &config))
             .await
     }
 
@@ -146,6 +150,7 @@ impl EnvironmentRecordService {
             None => return Ok(false),
         };
         let config = self.config_service.lock().await.get().await?;
+        let scope = config.environment_management.env_scope.as_str();
         let remaining: Vec<_> = data
             .installations
             .iter()
@@ -166,6 +171,7 @@ impl EnvironmentRecordService {
 
         if let Some(ref replacement) = replacement {
             return registry::registry_needs_update(
+                scope,
                 &self.create_apply_plan(replacement, &remaining_same, &config),
             )
             .await;
@@ -174,6 +180,7 @@ impl EnvironmentRecordService {
             return Ok(false);
         }
         registry::registry_needs_cleanup(
+            scope,
             &self.create_cleanup_plan(&record, &remaining_same, &data.installations, &config),
         )
         .await
@@ -534,8 +541,9 @@ impl EnvironmentRecordService {
         }
 
         // Step 2 – update the Windows registry.
+        let scope = config.environment_management.env_scope.as_str();
         let plan = self.create_apply_plan(record, records, &config);
-        registry::apply_registry_plan(&self.app_handle, &plan).await?;
+        registry::apply_registry_plan(&self.app_handle, scope, &plan).await?;
 
         Ok(())
     }
@@ -549,8 +557,9 @@ impl EnvironmentRecordService {
         all_records: &[InstallRecord],
         config: &AppConfig,
     ) -> AppResult<()> {
+        let scope = config.environment_management.env_scope.as_str();
         let plan = self.create_cleanup_plan(record, remaining_same, all_records, config);
-        registry::cleanup_registry_plan(&self.app_handle, &plan).await?;
+        registry::cleanup_registry_plan(&self.app_handle, scope, &plan).await?;
 
         // In symlink mode, remove the junction if no other versions remain.
         if config.environment_management.mode == "symlink" && remaining_same.is_empty() {
@@ -600,6 +609,66 @@ impl EnvironmentRecordService {
         })
         .await
         .map_err(|e| AppError::Message(format!("join error: {}", e)))??;
+
+        Ok(())
+    }
+
+    /// Switch the environment variable storage scope (user ↔ system).
+    ///
+    /// 1. Collects all managed env var names and PATH entries from all installations.
+    /// 2. Removes those values from the old scope.
+    /// 3. Re-applies the active installations' env vars to the new scope.
+    pub async fn switch_env_scope(&self, new_scope: &str) -> AppResult<()> {
+        let config = self.config_service.lock().await.get().await?;
+        let old_scope = config.environment_management.env_scope.as_str();
+        if old_scope == new_scope {
+            return Ok(());
+        }
+
+        let data = self.read_data().await?;
+        let defs = environment_definitions();
+
+        // Collect all managed env var names.
+        let mut all_env_var_names: Vec<String> = defs
+            .iter()
+            .flat_map(|d| d.env_vars.clone())
+            .collect();
+        all_env_var_names.sort();
+        all_env_var_names.dedup();
+
+        // Collect all PATH entries from all installations.
+        let all_path_entries: Vec<String> = data
+            .installations
+            .iter()
+            .flat_map(|r| r.path_entries.clone())
+            .collect();
+
+        // Step 1: Clean up old scope.
+        registry::cleanup_scope(
+            &self.app_handle,
+            old_scope,
+            &all_env_var_names,
+            &all_path_entries,
+        )
+        .await?;
+
+        // Step 2: Re-apply active installations to new scope.
+        for d in &defs {
+            let kind = &d.id;
+            let records_for_kind: Vec<_> = data
+                .installations
+                .iter()
+                .filter(|r| &r.environment == kind)
+                .cloned()
+                .collect();
+
+            if let Some(active_record) = records_for_kind.iter().find(|r| r.active) {
+                let plan =
+                    self.create_apply_plan(active_record, &records_for_kind, &config);
+                registry::apply_registry_plan(&self.app_handle, new_scope, &plan)
+                    .await?;
+            }
+        }
 
         Ok(())
     }

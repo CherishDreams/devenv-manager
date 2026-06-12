@@ -27,6 +27,7 @@ pub struct AppearanceConfig {
 #[serde(rename_all = "camelCase")]
 pub struct EnvironmentManagementConfig {
     pub mode: String, // "symlink" | "direct"
+    pub env_scope: String, // "user" | "system"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +53,7 @@ impl Default for AppConfig {
             },
             environment_management: EnvironmentManagementConfig {
                 mode: "symlink".to_string(),
+                env_scope: "user".to_string(),
             },
             proxy: ProxyConfig {
                 enabled: false,
@@ -120,6 +122,9 @@ impl ConfigService {
         }
         if config.environment_management.mode.is_empty() {
             config.environment_management.mode = defaults.environment_management.mode;
+        }
+        if config.environment_management.env_scope.is_empty() {
+            config.environment_management.env_scope = defaults.environment_management.env_scope;
         }
 
         config

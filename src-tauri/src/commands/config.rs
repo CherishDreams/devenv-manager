@@ -19,3 +19,24 @@ pub async fn config_update(
     let config_service = state.config.lock().await;
     config_service.update(patch).await
 }
+
+/// Switches the environment variable storage scope (user ↔ system),
+/// migrating all managed variables from the old scope to the new one.
+#[tauri::command]
+pub async fn config_switch_env_scope(
+    state: State<'_, AppState>,
+    scope: String,
+) -> AppResult<()> {
+    let env_record = state.environment_record.lock().await;
+    env_record.switch_env_scope(&scope).await?;
+
+    // Persist the new scope to config.
+    let config_service = state.config.lock().await;
+    config_service
+        .update(serde_json::json!({
+            "environmentManagement": { "envScope": scope }
+        }))
+        .await?;
+
+    Ok(())
+}

@@ -9,7 +9,7 @@ import {
   PlayCircleOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Descriptions, Empty, Progress, Tag, Typography } from "antd";
+import { Button, Descriptions, Empty, Progress, Tag, Typography } from "antd";
 import { useMemo } from "react";
 import { EnvironmentLogo } from "../components/EnvironmentLogo";
 import { useConfigStore } from "../stores/configStore";
@@ -171,15 +171,6 @@ export default function DashboardPage(): React.ReactElement {
 
   return (
     <div className="dashboard-page">
-      {!status?.isAdministrator ? (
-        <Alert
-          type="warning"
-          showIcon
-          message="当前不是管理员权限"
-          description="系统环境变量写入需要管理员权限，打包后的 Windows 安装版会请求管理员运行。"
-        />
-      ) : null}
-
       <div className="dashboard-toolbar">
         <div>
           <Typography.Title level={3}>开发环境状态</Typography.Title>
