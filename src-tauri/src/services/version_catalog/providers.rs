@@ -378,13 +378,10 @@ pub async fn list_cpp_versions(vendor: &str, config: &AppConfig) -> AppResult<Ve
                 config,
             ).await?;
 
+            let asset_re = regex_lite::Regex::new(r"^llvm-mingw-\d+-ucrt-x86_64\.zip$").unwrap();
             Ok(releases.iter()
                 .filter(|r| !r.draft && !r.prerelease)
-                .filter(|r| r.assets.iter().any(|a| {
-                    regex_lite::Regex::new(r"^llvm-mingw-\d+-ucrt-x86_64\.zip$")
-                        .map(|re| re.is_match(&a.name))
-                        .unwrap_or(false)
-                }))
+                .filter(|r| r.assets.iter().any(|a| asset_re.is_match(&a.name)))
                 .take(MAX_VERSION_OPTIONS)
                 .map(|r| create_version(
                     EnvironmentKind::Cpp, "llvm-mingw", &r.tag_name,
@@ -407,10 +404,11 @@ pub async fn list_lua_versions(vendor: &str, config: &AppConfig) -> AppResult<Ve
                 config,
             ).await?;
 
+            let version_re = regex_lite::Regex::new(r"^\d+\.\d+\.\d+$").unwrap();
             let mut versions: Vec<String> = releases.iter()
                 .filter(|r| !r.draft && !r.prerelease)
                 .map(|r| r.tag_name.trim_start_matches('v').to_string())
-                .filter(|v| regex_lite::Regex::new(r"^\d+\.\d+\.\d+$").map(|re| re.is_match(v)).unwrap_or(false))
+                .filter(|v| version_re.is_match(v))
                 .collect();
             versions = unique(&versions);
             versions.sort_by(|a, b| compare_versions_desc(a, b));

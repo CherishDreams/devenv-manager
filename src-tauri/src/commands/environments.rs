@@ -1,64 +1,72 @@
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, State};
+use crate::error::AppResult;
 use crate::state::AppState;
 use crate::shared::types::*;
 
+/// Returns a summary of all registered environments.
 #[tauri::command]
 pub async fn environments_get_summary(
-    state: tauri::State<'_, AppState>,
-) -> Result<EnvironmentSummary, String> {
+    state: State<'_, AppState>,
+) -> AppResult<EnvironmentSummary> {
     let env_record = state.environment_record.lock().await;
-    env_record.get_summary().await.map_err(|e| e.to_string())
+    env_record.get_summary().await
 }
 
+/// Discovers unregistered environments installed on the system.
 #[tauri::command]
 pub async fn environments_discover(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<DiscoveredEnvironment>, String> {
+    state: State<'_, AppState>,
+) -> AppResult<Vec<DiscoveredEnvironment>> {
     let discovery = state.environment_discovery.lock().await;
-    discovery.discover().await.map_err(|e| e.to_string())
+    discovery.discover().await
 }
 
+/// Adopts existing environment installations and returns the updated summary.
 #[tauri::command]
 pub async fn environments_adopt(
     app: AppHandle,
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
     inputs: Vec<AdoptEnvironmentInput>,
-) -> Result<EnvironmentSummary, String> {
+) -> AppResult<EnvironmentSummary> {
     let summary = {
         let env_record = state.environment_record.lock().await;
-        env_record.adopt_existing_installs(inputs).await.map_err(|e| e.to_string())?
+        env_record.adopt_existing_installs(inputs).await?
     };
     // Emit event
     let _ = app.emit("environments:changed", &summary);
     Ok(summary)
 }
 
+/// Sets the active environment version and emits a change event.
 #[tauri::command]
 pub async fn environments_set_active(
     app: AppHandle,
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
     environment: EnvironmentKind,
     id: String,
-    #[allow(unused_variables)] authorized: bool,
-) -> Result<EnvironmentSummary, String> {
+    // TODO: verify elevation authorization before performing write operations
+    _authorized: bool,
+) -> AppResult<EnvironmentSummary> {
     let summary = {
         let env_record = state.environment_record.lock().await;
-        env_record.set_active(&environment, &id).await.map_err(|e| e.to_string())?
+        env_record.set_active(&environment, &id).await?
     };
     let _ = app.emit("environments:changed", &summary);
     Ok(summary)
 }
 
+/// Uninstalls a managed environment and emits a change event.
 #[tauri::command]
 pub async fn environments_uninstall(
     app: AppHandle,
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
     id: String,
-    #[allow(unused_variables)] authorized: bool,
-) -> Result<EnvironmentSummary, String> {
+    // TODO: verify elevation authorization before performing write operations
+    _authorized: bool,
+) -> AppResult<EnvironmentSummary> {
     let summary = {
         let env_record = state.environment_record.lock().await;
-        env_record.uninstall_managed(&id).await.map_err(|e| e.to_string())?
+        env_record.uninstall_managed(&id).await?
     };
     let _ = app.emit("environments:changed", &summary);
     Ok(summary)

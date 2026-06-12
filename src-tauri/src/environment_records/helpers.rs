@@ -3,6 +3,7 @@ use tokio::fs;
 use crate::error::{AppError, AppResult};
 use crate::shared::types::*;
 use crate::shared::environment_definitions::environment_definitions;
+pub use crate::shared::utils::unique;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EnvironmentData {
@@ -15,16 +16,6 @@ impl Default for EnvironmentData {
             installations: vec![],
         }
     }
-}
-
-/// Return deduplicated, non-empty strings preserving first-seen order.
-pub fn unique(values: &[String]) -> Vec<String> {
-    let mut seen = std::collections::HashSet::new();
-    values
-        .iter()
-        .filter(|v| !v.is_empty() && seen.insert(v.clone()))
-        .cloned()
-        .collect()
 }
 
 /// Look up the [EnvironmentDefinition] for a given [EnvironmentKind].

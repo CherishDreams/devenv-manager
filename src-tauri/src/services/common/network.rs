@@ -4,6 +4,7 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 use crate::error::{AppError, AppResult};
 use crate::services::config::AppConfig;
+pub use crate::shared::utils::{unique, compare_version_desc as compare_versions_desc};
 
 const REQUEST_TIMEOUT_SECS: u64 = 20;
 pub const MAX_VERSION_OPTIONS: usize = 40;
@@ -73,30 +74,4 @@ pub async fn fetch_json_from_sources<T: DeserializeOwned>(
     }
 
     Err(AppError::Message(format!("所有版本源请求失败：{}", errors.join("；"))))
-}
-
-/// Compare version strings in descending order (for sorting).
-pub fn compare_versions_desc(left: &str, right: &str) -> std::cmp::Ordering {
-    let left_parts: Vec<i64> = left.split('.').filter_map(|p| p.parse().ok()).collect();
-    let right_parts: Vec<i64> = right.split('.').filter_map(|p| p.parse().ok()).collect();
-    let len = left_parts.len().max(right_parts.len());
-
-    for i in 0..len {
-        let l = left_parts.get(i).copied().unwrap_or(0);
-        let r = right_parts.get(i).copied().unwrap_or(0);
-        match r.cmp(&l) {
-            std::cmp::Ordering::Equal => continue,
-            other => return other,
-        }
-    }
-    std::cmp::Ordering::Equal
-}
-
-/// Deduplicate a vector while preserving order.
-pub fn unique<T: Eq + std::hash::Hash + Clone>(values: &[T]) -> Vec<T> {
-    let mut seen = std::collections::HashSet::new();
-    values.iter()
-        .filter(|v| seen.insert((*v).clone()))
-        .cloned()
-        .collect()
 }

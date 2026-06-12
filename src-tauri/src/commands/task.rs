@@ -1,71 +1,82 @@
+use tauri::State;
 use crate::error::AppResult;
 use crate::shared::types::*;
 use crate::state::AppState;
 
+/// Returns a list of all managed tasks (active and completed).
 #[tauri::command]
-pub async fn tasks_list(state: tauri::State<'_, AppState>) -> AppResult<Vec<ManagedTask>> {
+pub async fn tasks_list(state: State<'_, AppState>) -> AppResult<Vec<ManagedTask>> {
     let svc = state.task.lock().await;
     Ok(svc.list().await)
 }
 
+/// Creates a new background installation task and returns the created task.
 #[tauri::command]
 pub async fn tasks_create_install(
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
     input: InstallTaskInput,
-    #[allow(unused_variables)] authorized: bool,
+    // TODO: verify elevation authorization before performing write operations
+    _authorized: bool,
 ) -> AppResult<ManagedTask> {
     let mut svc = state.task.lock().await;
     Ok(svc.create_install_task(input).await)
 }
 
+/// Cancels a running task by ID and returns the updated task.
 #[tauri::command]
 pub async fn tasks_cancel(
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
     id: String,
 ) -> AppResult<Option<ManagedTask>> {
     let mut svc = state.task.lock().await;
     Ok(svc.cancel_task(&id).await)
 }
 
+/// Retries a previously failed task and returns the restarted task.
 #[tauri::command]
 pub async fn tasks_retry(
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
     id: String,
-    #[allow(unused_variables)] authorized: bool,
+    // TODO: verify elevation authorization before performing write operations
+    _authorized: bool,
 ) -> AppResult<ManagedTask> {
     let mut svc = state.task.lock().await;
     svc.retry_task(&id).await
 }
 
+/// Removes a task from the task list and returns the remaining tasks.
 #[tauri::command]
 pub async fn tasks_remove(
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
     id: String,
 ) -> AppResult<Vec<ManagedTask>> {
     let mut svc = state.task.lock().await;
     svc.remove_task(&id).await
 }
 
+/// Removes all completed or cancelled tasks and returns the remaining active tasks.
 #[tauri::command]
 pub async fn tasks_clear_finished(
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
 ) -> AppResult<Vec<ManagedTask>> {
     let mut svc = state.task.lock().await;
-    Ok(svc.clear_finished().await)
+    Ok(svc.clear_inactive().await)
 }
 
+/// Retrieves the original install input of a task for retry purposes.
 #[tauri::command]
 pub async fn tasks_get_retry_input(
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
     id: String,
 ) -> AppResult<Option<InstallTaskInput>> {
     let svc = state.task.lock().await;
     Ok(svc.get_retry_input(&id).await)
 }
 
+/// Checks whether the current operation requires administrator privileges.
 #[tauri::command]
 pub async fn permissions_check(
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
     input: PrivilegeCheckInput,
 ) -> AppResult<PrivilegeRequirement> {
     let config = state.config.lock().await;
@@ -87,8 +98,7 @@ pub async fn permissions_check(
     let needs_service_elevation = install_input
         .as_ref()
         .and_then(|i| i.database_config.as_ref())
-        .map(|db| db.enabled && db.install_as_service)
-        .unwrap_or(false);
+        .is_some_and(|db| db.enabled && db.install_as_service);
 
     // Check if this is an environment write operation
     let environment_write = matches!(
@@ -96,8 +106,7 @@ pub async fn permissions_check(
         PrivilegeCheckInput::SetActive { .. } | PrivilegeCheckInput::Uninstall { .. }
     ) || install_input
         .as_ref()
-        .map(|i| i.configure_system_env)
-        .unwrap_or(false);
+        .is_some_and(|i| i.configure_system_env);
 
     // Check if mode is "direct"
     let is_direct_mode = app_config.environment_management.mode == "direct";

@@ -1,3 +1,7 @@
+// TODO: Elevation service is a planned feature for admin-privileged operations.
+// Most items are unused until the frontend integrates elevation workflows.
+#![allow(dead_code)]
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::net::windows::named_pipe::{PipeMode, ServerOptions, ClientOptions};
@@ -234,91 +238,101 @@ pub async fn start_elevated_broker_server(
         .create(pipe_path)
         .map_err(|e| AppError::Message(format!("创建命名管道失败：{}", e)))?;
 
+    let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     loop {
-        // Wait for a client to connect.
-        server.connect().await
-            .map_err(|e| AppError::Message(format!("等待客户端连接失败：{}", e)))?;
+        tokio::select! {
+            connect_result = server.connect() => {
+                connect_result
+                    .map_err(|e| AppError::Message(format!("等待客户端连接失败：{}", e)))?;
 
-        // Take the connected server, create a new one for the next client.
-        let mut client = std::mem::replace(
-            &mut server,
-            ServerOptions::new()
-                .pipe_mode(PipeMode::Byte)
-                .create(pipe_path)
-                .map_err(|e| AppError::Message(format!("创建命名管道失败：{}", e)))?,
-        );
+                // Take the connected server, create a new one for the next client.
+                let mut client = std::mem::replace(
+                    &mut server,
+                    ServerOptions::new()
+                        .pipe_mode(PipeMode::Byte)
+                        .create(pipe_path)
+                        .map_err(|e| AppError::Message(format!("创建命名管道失败：{}", e)))?,
+                );
 
-        let env_record = env_record.clone();
+                let env_record = env_record.clone();
+                let shutdown_tx = shutdown_tx.clone();
 
-        tauri::async_runtime::spawn(async move {
-            let mut buffer = String::new();
-            if let Err(e) = client.read_to_string(&mut buffer).await {
-                eprintln!("读取客户端命令失败：{}", e);
-                return;
-            }
+                tauri::async_runtime::spawn(async move {
+                    let mut buffer = String::new();
+                    if let Err(e) = client.read_to_string(&mut buffer).await {
+                        eprintln!("读取客户端命令失败：{}", e);
+                        return;
+                    }
 
-            let line = buffer.lines().next().unwrap_or("").trim();
-            let command: Result<ElevatedBrokerCommand, _> = serde_json::from_str(line);
+                    let line = buffer.lines().next().unwrap_or("").trim();
+                    let command: Result<ElevatedBrokerCommand, _> = serde_json::from_str(line);
 
-            let result = match command {
-                Ok(ElevatedBrokerCommand::Ping) => ElevatedOperationResult {
-                    ok: true,
-                    summary: None,
-                    error: None,
-                },
-                Ok(ElevatedBrokerCommand::Shutdown) => {
-                    let result = ElevatedOperationResult {
-                        ok: true,
-                        summary: None,
-                        error: None,
+                    let is_shutdown = matches!(command, Ok(ElevatedBrokerCommand::Shutdown));
+
+                    let result = match command {
+                        Ok(ElevatedBrokerCommand::Ping) => ElevatedOperationResult {
+                            ok: true,
+                            summary: None,
+                            error: None,
+                        },
+                        Ok(ElevatedBrokerCommand::Shutdown) => ElevatedOperationResult {
+                            ok: true,
+                            summary: None,
+                            error: None,
+                        },
+                        Ok(ElevatedBrokerCommand::SetActive { environment, id }) => {
+                            let env_rec = env_record.lock().await;
+                            match env_rec.set_active(&environment, &id).await {
+                                Ok(summary) => ElevatedOperationResult {
+                                    ok: true,
+                                    summary: Some(summary),
+                                    error: None,
+                                },
+                                Err(e) => ElevatedOperationResult {
+                                    ok: false,
+                                    summary: None,
+                                    error: Some(e.to_string()),
+                                },
+                            }
+                        }
+                        Ok(ElevatedBrokerCommand::Uninstall { id }) => {
+                            let env_rec = env_record.lock().await;
+                            match env_rec.uninstall_managed(&id).await {
+                                Ok(summary) => ElevatedOperationResult {
+                                    ok: true,
+                                    summary: Some(summary),
+                                    error: None,
+                                },
+                                Err(e) => ElevatedOperationResult {
+                                    ok: false,
+                                    summary: None,
+                                    error: Some(e.to_string()),
+                                },
+                            }
+                        }
+                        Err(e) => ElevatedOperationResult {
+                            ok: false,
+                            summary: None,
+                            error: Some(format!("解析命令失败：{}", e)),
+                        },
                     };
-                    let json = serde_json::to_string(&result).unwrap();
+
+                    let json = serde_json::to_string(&result).unwrap_or_default();
                     let _ = client.write_all(json.as_bytes()).await;
                     let _ = client.write_all(b"\n").await;
                     let _ = client.flush().await;
-                    std::process::exit(0);
-                }
-                Ok(ElevatedBrokerCommand::SetActive { environment, id }) => {
-                    let env_rec = env_record.lock().await;
-                    match env_rec.set_active(&environment, &id).await {
-                        Ok(summary) => ElevatedOperationResult {
-                            ok: true,
-                            summary: Some(summary),
-                            error: None,
-                        },
-                        Err(e) => ElevatedOperationResult {
-                            ok: false,
-                            summary: None,
-                            error: Some(e.to_string()),
-                        },
-                    }
-                }
-                Ok(ElevatedBrokerCommand::Uninstall { id }) => {
-                    let env_rec = env_record.lock().await;
-                    match env_rec.uninstall_managed(&id).await {
-                        Ok(summary) => ElevatedOperationResult {
-                            ok: true,
-                            summary: Some(summary),
-                            error: None,
-                        },
-                        Err(e) => ElevatedOperationResult {
-                            ok: false,
-                            summary: None,
-                            error: Some(e.to_string()),
-                        },
-                    }
-                }
-                Err(e) => ElevatedOperationResult {
-                    ok: false,
-                    summary: None,
-                    error: Some(format!("解析命令失败：{}", e)),
-                },
-            };
 
-            let json = serde_json::to_string(&result).unwrap();
-            let _ = client.write_all(json.as_bytes()).await;
-            let _ = client.write_all(b"\n").await;
-            let _ = client.flush().await;
-        });
+                    if is_shutdown {
+                        let _ = shutdown_tx.send(()).await;
+                    }
+                });
+            }
+            _ = shutdown_rx.recv() => {
+                break;
+            }
+        }
     }
+
+    Ok(())
 }

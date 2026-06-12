@@ -111,6 +111,7 @@ pub enum InstallType {
     Installer,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VersionChannel {
@@ -171,6 +172,7 @@ pub type ActiveEnvironmentMap = HashMap<EnvironmentKind, String>;
 
 // ── Installation Result ──────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallationResult {

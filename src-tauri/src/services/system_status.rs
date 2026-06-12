@@ -28,12 +28,15 @@ impl SystemStatusService {
                 .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
                 .output()
                 .await
-                .map(|output| output.status.success())
-                .unwrap_or(false)
+                .is_ok_and(|output| output.status.success())
         } else {
             // On Unix, check if uid is 0
             #[cfg(unix)]
-            { unsafe { libc::geteuid() == 0 } }
+            {
+                // SAFETY: geteuid() is a simple POSIX syscall with no memory-safety
+                // preconditions; it returns an integer UID without touching any buffers.
+                unsafe { libc::geteuid() == 0 }
+            }
             #[cfg(not(unix))]
             { false }
         }

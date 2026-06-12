@@ -78,6 +78,8 @@ impl EnvironmentRecordService {
         })
     }
 
+    // ── Planned: elevation support for admin-privileged operations ──
+    #[allow(dead_code)]
     /// Synchronize the current process' environment variables with the registry
     /// so that child processes inherit the correct values.
     pub async fn synchronize_process_env(&self) -> AppResult<()> {
@@ -93,6 +95,7 @@ impl EnvironmentRecordService {
 
     // ── Elevation checks ─────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     pub async fn requires_elevation_for_install(
         &self,
         environment: &EnvironmentKind,
@@ -116,6 +119,7 @@ impl EnvironmentRecordService {
         .await
     }
 
+    #[allow(dead_code)]
     pub async fn requires_elevation_for_set_active(
         &self,
         environment: &EnvironmentKind,
@@ -134,6 +138,7 @@ impl EnvironmentRecordService {
             .await
     }
 
+    #[allow(dead_code)]
     pub async fn requires_elevation_for_uninstall(&self, id: &str) -> AppResult<bool> {
         let data = self.read_data().await?;
         let record = match data.installations.iter().find(|r| r.id == id) {

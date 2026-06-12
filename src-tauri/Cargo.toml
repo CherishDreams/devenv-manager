@@ -2,7 +2,6 @@
 name = "env-manager"
 version = "0.1.0"
 description = "Windows desktop environment manager for developer runtimes"
-authors = ["you"]
 edition = "2021"
 
 [build-dependencies]

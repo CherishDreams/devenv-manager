@@ -53,6 +53,7 @@ enum TaskUpdate {
     Progress { id: String, progress: f64 },
     Download { id: String, progress: TaskDownloadProgress },
     Status { id: String, status: TaskStatus, log: Option<TaskLogEntry> },
+    #[allow(dead_code)]
     Done { id: String },
     /// Signals the background loop to persist current state and emit the changed event.
     PersistAndEmit,
@@ -120,7 +121,9 @@ impl TaskService {
             if changed {
                 let tasks = tasks_for_loop.lock().await;
                 let data = TaskData { tasks: tasks.clone() };
-                let _ = store.write(&data).await;
+                if let Err(e) = store.write(&data).await {
+                    eprintln!("[task-service] Failed to persist tasks to disk: {}", e);
+                }
             }
 
             let mut rx = update_rx;
@@ -160,8 +163,12 @@ impl TaskService {
                 }
                 // Persist and emit
                 let data = TaskData { tasks: tasks.clone() };
-                let _ = store.write(&data).await;
-                let _ = app_handle_loop.emit("tasks:changed", &*tasks);
+                if let Err(e) = store.write(&data).await {
+                    eprintln!("[task-service] Failed to persist tasks to disk: {}", e);
+                }
+                if let Err(e) = app_handle_loop.emit("tasks:changed", &*tasks) {
+                    eprintln!("[task-service] Failed to emit tasks:changed event: {}", e);
+                }
             }
         });
 
@@ -248,7 +255,9 @@ impl TaskService {
                 task.updated_at = now;
                 task.logs.push(create_log("任务已重新加入队列，等待执行。", "info"));
             }
-            tasks.iter().find(|t| t.id == id).unwrap().clone()
+            tasks.iter().find(|t| t.id == id)
+                .cloned()
+                .ok_or_else(|| AppError::Message("重试任务时状态异常，请重新操作。".into()))?
         };
         let _ = self.update_tx.send(TaskUpdate::PersistAndEmit);
 
@@ -259,15 +268,14 @@ impl TaskService {
     }
 
     pub async fn cancel_task(&mut self, id: &str) -> Option<ManagedTask> {
-        let should_cancel = {
+        let _ = {
             let tasks = self.tasks.lock().await;
-            tasks.iter().find(|t| t.id == id).map(|t| is_active(t)).unwrap_or(false)
+            match tasks.iter().find(|t| t.id == id) {
+                Some(t) if is_active(t) => true,
+                Some(_) => return tasks.iter().find(|t| t.id == id).cloned(),
+                None => return None,
+            }
         };
-
-        if !should_cancel {
-            let tasks = self.tasks.lock().await;
-            return tasks.iter().find(|t| t.id == id).cloned();
-        }
 
         if let Some(token) = self.controllers.remove(id) {
             token.cancel();
@@ -287,31 +295,27 @@ impl TaskService {
     }
 
     pub async fn remove_task(&mut self, id: &str) -> AppResult<Vec<ManagedTask>> {
-        let exists = {
-            let tasks = self.tasks.lock().await;
-            tasks.iter().any(|t| t.id == id)
-        };
-        if !exists {
-            return Ok(self.tasks.lock().await.clone());
-        }
-
-        let is_task_active = {
-            let tasks = self.tasks.lock().await;
-            tasks.iter().any(|t| t.id == id && is_active(t))
-        };
-        if is_task_active {
-            return Err(AppError::Message("进行中的任务不能移除，请先取消任务。".to_string()));
-        }
-
         {
+            let tasks = self.tasks.lock().await;
+            match tasks.iter().find(|t| t.id == id) {
+                Some(t) if is_active(t) => {
+                    return Err(AppError::Message("进行中的任务不能移除，请先取消任务。".to_string()));
+                }
+                None => return Ok(tasks.clone()),
+                _ => {}
+            }
+        }
+
+        let tasks = {
             let mut tasks = self.tasks.lock().await;
             tasks.retain(|t| t.id != id);
-        }
+            tasks.clone()
+        };
         let _ = self.update_tx.send(TaskUpdate::PersistAndEmit);
-        Ok(self.tasks.lock().await.clone())
+        Ok(tasks)
     }
 
-    pub async fn clear_finished(&mut self) -> Vec<ManagedTask> {
+    pub async fn clear_inactive(&mut self) -> Vec<ManagedTask> {
         {
             let mut tasks = self.tasks.lock().await;
             tasks.retain(|t| is_active(t));

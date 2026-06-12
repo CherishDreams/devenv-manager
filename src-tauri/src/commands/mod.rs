@@ -1,3 +1,5 @@
+//! Tauri IPC command handlers invoked by the frontend.
+
 pub mod config;
 pub mod system;
 pub mod dialog;

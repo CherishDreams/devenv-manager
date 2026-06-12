@@ -68,7 +68,7 @@ function SettingsRow({
   );
 }
 
-export default function SettingsPage(): React.ReactElement {
+export function SettingsPage(): React.ReactElement {
   const [form] = Form.useForm<ConfigFormValues>();
   const [activeTab, setActiveTab] = useState<SettingsTabKey>("general");
   const { message, modal } = AntdApp.useApp();
@@ -103,12 +103,6 @@ export default function SettingsPage(): React.ReactElement {
   }, [config, definitionsById]);
 
   const navigationLayout = config?.appearance?.navigationLayout ?? "sidebar";
-
-  useEffect(() => {
-    if (config) {
-      form.setFieldsValue(config);
-    }
-  }, [config, form]);
 
   const selectDirectory = async (
     fieldName: keyof Pick<AppConfig, "globalInstallDir" | "downloadCacheDir">,

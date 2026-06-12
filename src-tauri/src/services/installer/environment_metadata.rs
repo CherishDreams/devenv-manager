@@ -1,9 +1,7 @@
-use std::collections::HashMap;
 use std::path::Path;
-use crate::error::{AppError, AppResult};
 use crate::shared::types::*;
 use crate::services::config::AppConfig;
-use crate::shared::environment_definitions::environment_definitions;
+use crate::shared::utils::compare_version_asc;
 
 /// Compute the install path based on scope and config.
 pub fn get_install_path(config: &AppConfig, input: &InstallTaskInput, resolved_version: &str) -> String {
@@ -23,56 +21,6 @@ pub fn get_install_path(config: &AppConfig, input: &InstallTaskInput, resolved_v
                 resolved_version
             )
         }
-    }
-}
-
-/// Get path entries for a definition resolved to an install path.
-pub fn get_path_entries(definition: &EnvironmentDefinition, install_path: &str) -> Vec<String> {
-    definition
-        .path_entries
-        .iter()
-        .map(|entry| {
-            if entry.is_empty() {
-                install_path.to_string()
-            } else {
-                format!("{}\\{}", install_path, entry)
-            }
-        })
-        .collect()
-}
-
-/// Get environment variables for a definition resolved to an install path.
-pub fn get_env_vars(
-    definition: &EnvironmentDefinition,
-    install_path: &str,
-) -> HashMap<String, String> {
-    match definition.id {
-        EnvironmentKind::Nvm => {
-            let mut map = HashMap::new();
-            map.insert("NVM_HOME".to_string(), install_path.to_string());
-            map.insert(
-                "NVM_SYMLINK".to_string(),
-                format!("{}\\nodejs", install_path),
-            );
-            map
-        }
-        EnvironmentKind::Rust => {
-            let mut map = HashMap::new();
-            map.insert(
-                "CARGO_HOME".to_string(),
-                format!("{}\\cargo", install_path),
-            );
-            map.insert(
-                "RUSTUP_HOME".to_string(),
-                format!("{}\\rustup", install_path),
-            );
-            map
-        }
-        _ => definition
-            .env_vars
-            .iter()
-            .map(|name| (name.clone(), install_path.to_string()))
-            .collect(),
     }
 }
 
@@ -119,33 +67,7 @@ pub fn get_verification_command(
     }
 }
 
-/// Compare two dotted version strings numerically.
+/// Compare two dotted version strings numerically (ascending).
 pub fn compare_version(left: &str, right: &str) -> std::cmp::Ordering {
-    let left_parts: Vec<i64> = left
-        .split('.')
-        .filter_map(|p| p.parse().ok())
-        .collect();
-    let right_parts: Vec<i64> = right
-        .split('.')
-        .filter_map(|p| p.parse().ok())
-        .collect();
-    let len = left_parts.len().max(right_parts.len());
-
-    for i in 0..len {
-        let l = left_parts.get(i).copied().unwrap_or(0);
-        let r = right_parts.get(i).copied().unwrap_or(0);
-        match l.cmp(&r) {
-            std::cmp::Ordering::Equal => continue,
-            other => return other,
-        }
-    }
-    std::cmp::Ordering::Equal
-}
-
-/// Look up the definition for a given environment kind.
-pub fn get_definition(environment: &EnvironmentKind) -> AppResult<EnvironmentDefinition> {
-    environment_definitions()
-        .into_iter()
-        .find(|d| &d.id == environment)
-        .ok_or_else(|| AppError::Message(format!("未知环境：{}", environment)))
+    compare_version_asc(left, right)
 }

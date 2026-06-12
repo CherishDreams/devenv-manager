@@ -1,3 +1,5 @@
+//! Core business logic services.
+
 pub mod config;
 pub mod json_file_store;
 pub mod system_status;

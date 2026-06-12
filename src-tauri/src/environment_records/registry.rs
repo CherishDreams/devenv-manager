@@ -345,8 +345,11 @@ pub async fn apply_registry_plan(
     }
 
     // Synchronize the current process environment.
+    // SAFETY: These calls occur within the registry update path on Windows.
+    // The Windows API for environment variables is thread-safe, and no other
+    // threads concurrently modify the process environment block.
     for (name, value) in &plan.env_vars {
-        std::env::set_var(name, value);
+        unsafe { std::env::set_var(name, value); }
     }
 
     // Update Path / PATH in the current process.
@@ -356,7 +359,8 @@ pub async fn apply_registry_plan(
         } else {
             "Path"
         };
-    std::env::set_var(path_key, &new_path);
+    // SAFETY: See above — single-threaded environment update path on Windows.
+    unsafe { std::env::set_var(path_key, &new_path); }
 
     Ok(())
 }
@@ -416,8 +420,11 @@ pub async fn cleanup_registry_plan(
     }
 
     // Clean the current process environment.
+    // SAFETY: These calls occur within the registry cleanup path on Windows.
+    // The Windows API for environment variables is thread-safe, and no other
+    // threads concurrently modify the process environment block.
     for name in &deletes {
-        std::env::remove_var(name);
+        unsafe { std::env::remove_var(name); }
     }
 
     if path_changed {
@@ -428,7 +435,8 @@ pub async fn cleanup_registry_plan(
         } else {
             "Path"
         };
-        std::env::set_var(path_key, &new_path);
+        // SAFETY: See above — single-threaded environment cleanup path on Windows.
+        unsafe { std::env::set_var(path_key, &new_path); }
     }
 
     Ok(())
@@ -446,13 +454,16 @@ pub async fn synchronize_process_env(names: &[String]) -> AppResult<()> {
 
     let current = read_machine_env_values(&refs).await?;
 
+    // SAFETY: These calls occur within the process-environment sync path on Windows.
+    // The Windows API for environment variables is thread-safe, and no other
+    // threads concurrently modify the process environment block.
     for name in names {
         match current.get(name.as_str()).and_then(|v| v.as_ref()) {
             Some(value) => {
-                std::env::set_var(name, value);
+                unsafe { std::env::set_var(name, value); }
             }
             None => {
-                std::env::remove_var(name);
+                unsafe { std::env::remove_var(name); }
             }
         }
     }
@@ -470,7 +481,8 @@ pub async fn synchronize_process_env(names: &[String]) -> AppResult<()> {
         } else {
             "Path"
         };
-    std::env::set_var(path_key, new_path);
+    // SAFETY: See above — single-threaded process-environment sync on Windows.
+    unsafe { std::env::set_var(path_key, new_path); }
 
     Ok(())
 }

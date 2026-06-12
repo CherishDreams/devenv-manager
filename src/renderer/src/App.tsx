@@ -21,11 +21,15 @@ import { getThemeDefinition, themeBodyClasses } from "./theme/themeDefinitions";
 type PageKey = "dashboard" | "installed" | "environments" | "logs" | "settings";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const InstalledEnvironmentsPage = lazy(() => import("./pages/InstalledEnvironmentsPage"));
+const InstalledEnvironmentsPage = lazy(() =>
+  import("./pages/InstalledEnvironmentsPage").then((mod) => ({ default: mod.InstalledEnvironmentsPage })),
+);
 const EnvironmentsPage = lazy(() =>
   import("./pages/EnvironmentsPage").then((mod) => ({ default: mod.EnvironmentInstallPage })),
 );
-const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const SettingsPage = lazy(() =>
+  import("./pages/SettingsPage").then((mod) => ({ default: mod.SettingsPage })),
+);
 const LogsPage = lazy(() => import("./pages/LogsPage"));
 
 const pageTitles: Record<PageKey, string> = {
@@ -199,7 +203,7 @@ function ClassicSidebar({
   );
 }
 
-export default function App(): React.ReactElement {
+export function App(): React.ReactElement {
   const [pageKey, setPageKey] = useState<PageKey>("dashboard");
   const config = useConfigStore((state) => state.config);
   const loadConfig = useConfigStore((state) => state.load);

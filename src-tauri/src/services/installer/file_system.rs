@@ -3,10 +3,7 @@ use tokio::fs;
 use tokio_util::sync::CancellationToken;
 use crate::error::{AppError, AppResult};
 use crate::services::common::shell::ps_quote;
-
-pub async fn path_exists(path: &str) -> bool {
-    tokio::fs::metadata(path).await.is_ok()
-}
+pub use crate::environment_records::helpers::path_exists;
 
 /// Ensure the install target directory exists and is empty.
 /// If it exists with content, throws an error.

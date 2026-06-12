@@ -1,5 +1,7 @@
-#![allow(dead_code)]
+//! Tauri application setup and command registration.
 
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tauri::Manager;
 
 mod error;
@@ -29,7 +31,7 @@ pub fn run() {
             let config_service = ConfigService::new(app_handle.clone())?;
             let system_status_service = SystemStatusService::new();
 
-            let config_arc = std::sync::Arc::new(tokio::sync::Mutex::new(config_service));
+            let config_arc = Arc::new(Mutex::new(config_service));
 
             // Initialize environment services (depend on config)
             let environment_record_service = EnvironmentRecordService::new(
@@ -37,7 +39,7 @@ pub fn run() {
                 config_arc.clone(),
             )?;
 
-            let env_record_arc = std::sync::Arc::new(tokio::sync::Mutex::new(environment_record_service));
+            let env_record_arc = Arc::new(Mutex::new(environment_record_service));
 
             let environment_discovery_service = EnvironmentDiscoveryService::new(
                 env_record_arc.clone(),
@@ -53,16 +55,16 @@ pub fn run() {
                 env_record_arc.clone(),
             )?;
 
-            let task_arc = std::sync::Arc::new(tokio::sync::Mutex::new(task_service));
+            let task_arc = Arc::new(Mutex::new(task_service));
 
             // Create app state
             let state = AppState {
                 app_handle,
                 config: config_arc,
-                system_status: std::sync::Arc::new(tokio::sync::Mutex::new(system_status_service)),
+                system_status: Arc::new(Mutex::new(system_status_service)),
                 environment_record: env_record_arc,
-                environment_discovery: std::sync::Arc::new(tokio::sync::Mutex::new(environment_discovery_service)),
-                version_catalog: std::sync::Arc::new(tokio::sync::Mutex::new(version_catalog_service)),
+                environment_discovery: Arc::new(Mutex::new(environment_discovery_service)),
+                version_catalog: Arc::new(Mutex::new(version_catalog_service)),
                 task: task_arc,
             };
 

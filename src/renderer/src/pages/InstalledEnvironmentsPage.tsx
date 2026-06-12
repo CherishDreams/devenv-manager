@@ -12,7 +12,7 @@ import { groupInstallations } from "./installed/groupInstallations";
 import { createInstalledColumns } from "./installed/installedColumns";
 import { InstalledGroupSection } from "./installed/InstalledGroupSection";
 
-export default function InstalledEnvironmentsPage(): React.ReactElement {
+export function InstalledEnvironmentsPage(): React.ReactElement {
   const { message } = AntdApp.useApp();
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [discovering, setDiscovering] = useState(false);
@@ -54,8 +54,8 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
       const nextDiscovered = await discoverExisting();
       setSelectedRowKeys(nextDiscovered.filter((item) => !item.alreadyManaged).map((item) => item.id));
       message.success(`扫描完成，发现 ${nextDiscovered.length} 个环境`);
-    } catch (error) {
-      message.error(getErrorMessage(error));
+    } catch (err) {
+      message.error(getErrorMessage(err));
     } finally {
       setDiscovering(false);
     }
@@ -67,8 +67,8 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
       const nextDiscovered = await discoverExisting(true);
       setSelectedRowKeys(nextDiscovered.filter((item) => !item.alreadyManaged).map((item) => item.id));
       message.success(`重新扫描完成，发现 ${nextDiscovered.length} 个环境`);
-    } catch (error) {
-      message.error(getErrorMessage(error));
+    } catch (err) {
+      message.error(getErrorMessage(err));
     } finally {
       setDiscovering(false);
     }
@@ -85,8 +85,8 @@ export default function InstalledEnvironmentsPage(): React.ReactElement {
       message.success(`已接管 ${selectedDiscovered.length} 个环境`);
       setDiscoveryOpen(false);
       setSelectedRowKeys([]);
-    } catch (error) {
-      message.error(getErrorMessage(error));
+    } catch (err) {
+      message.error(getErrorMessage(err));
     }
   }, [adoptExisting, message, selectedDiscovered]);
 

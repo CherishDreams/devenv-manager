@@ -4,8 +4,9 @@ use crate::error::AppResult;
 use crate::services::config::AppConfig;
 use crate::services::installer::database_setup::apply_database_install_config;
 use crate::services::installer::environment_metadata::{
-    get_definition, get_env_vars, get_install_path, get_path_entries, get_verification_command,
+    get_install_path, get_verification_command,
 };
+use crate::environment_records::helpers::{get_definition, get_env_vars, get_path_entries};
 use crate::services::installer::file_system::{ensure_empty_install_target, extract_zip};
 use crate::services::installer::install_executor::{
     prepare_installed_environment, run_installer,

@@ -17,7 +17,11 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
-// Tauri API implementation - replaces Electron preload API
+/**
+ * Tauri IPC bridge implementation.
+ * Replaces the Electron preload API; each method maps to a `invoke()` call
+ * to the Rust backend. Event subscriptions use Tauri's `listen()` API.
+ */
 export const tauriApi = {
   config: {
     get: () => invoke<AppConfig>("config_get"),
@@ -39,12 +43,20 @@ export const tauriApi = {
       invoke<EnvironmentSummary>("environments_uninstall", { id, authorized }),
     onChanged: (callback: (summary: EnvironmentSummary) => void): (() => void) => {
       let unlisten: UnlistenFn | undefined;
+      let isCancelled = false;
       void listen<EnvironmentSummary>("environments:changed", (event) => {
         callback(event.payload);
       }).then((fn) => {
-        unlisten = fn;
+        if (isCancelled) {
+          fn(); // immediately unregister since cleanup was already called
+        } else {
+          unlisten = fn;
+        }
+      }).catch((err) => {
+        console.error("[tauriApi] Failed to subscribe to environments:changed:", err);
       });
       return () => {
+        isCancelled = true;
         unlisten?.();
       };
     },
@@ -59,12 +71,20 @@ export const tauriApi = {
     clearFinished: () => invoke<ManagedTask[]>("tasks_clear_finished"),
     onChanged: (callback: (tasks: ManagedTask[]) => void): (() => void) => {
       let unlisten: UnlistenFn | undefined;
+      let isCancelled = false;
       void listen<ManagedTask[]>("tasks:changed", (event) => {
         callback(event.payload);
       }).then((fn) => {
-        unlisten = fn;
+        if (isCancelled) {
+          fn(); // immediately unregister since cleanup was already called
+        } else {
+          unlisten = fn;
+        }
+      }).catch((err) => {
+        console.error("[tauriApi] Failed to subscribe to tasks:changed:", err);
       });
       return () => {
+        isCancelled = true;
         unlisten?.();
       };
     },
