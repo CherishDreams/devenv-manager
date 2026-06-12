@@ -58,14 +58,16 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p release-assets
-          VERSION="${GITHUB_REF_NAME}"
+          TAG_VERSION="${GITHUB_REF_NAME}"
+          # Read actual build version from tauri.conf.json (source of truth for filenames)
+          BUILD_VERSION=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
 
-          # NSIS installer
-          cp src-tauri/target/release/bundle/nsis/DevEnvManager_${VERSION#v}_x64-setup.exe \
-            "release-assets/DevEnvManager-${VERSION}-x64-setup.exe"
+          # NSIS installer (filename uses build version from tauri.conf.json)
+          cp "src-tauri/target/release/bundle/nsis/DevEnvManager_${BUILD_VERSION}_x64-setup.exe" \
+            "release-assets/DevEnvManager-${TAG_VERSION}-x64-setup.exe"
 
           # Portable: zip the standalone exe
-          7z a "release-assets/DevEnvManager-${VERSION}-x64-portable.zip" \
+          7z a "release-assets/DevEnvManager-${TAG_VERSION}-x64-portable.zip" \
             src-tauri/target/release/env-manager.exe
 
           echo "Release assets prepared:"
