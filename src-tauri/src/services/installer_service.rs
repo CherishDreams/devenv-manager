@@ -132,7 +132,7 @@ pub async fn run_installation(
 
     let (verify_cmd, verify_args) = get_verification_command(&input.environment, &install_path);
     let verify_args_refs: Vec<&str> = verify_args.iter().map(|s| s.as_str()).collect();
-    let (stdout, stderr) = run_process(&verify_cmd, &verify_args_refs, cancel, None).await?;
+    let (stdout, stderr) = run_process(&verify_cmd, &verify_args_refs, cancel, Some(&env_vars)).await?;
     let verification_output = [stdout.trim(), stderr.trim()]
         .iter()
         .filter(|s| !s.is_empty())

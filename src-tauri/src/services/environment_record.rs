@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use tauri::{AppHandle, Manager};
 use tauri::path::BaseDirectory;
 use crate::error::{AppError, AppResult};
@@ -229,12 +231,15 @@ impl EnvironmentRecordService {
     }
 
     /// Add a new managed install record (created after a successful download / install).
+    ///
+    /// The record is persisted **before** applying system environment changes so that
+    /// even if symlink / registry operations fail the installation record is not lost.
     pub async fn add_managed_install(
         &self,
         input: AddManagedInstallInput,
     ) -> AppResult<InstallRecord> {
         let now = chrono::Utc::now().to_rfc3339();
-        let current_data = self.read_data().await?;
+        let _current_data = self.read_data().await?;
 
         let record = InstallRecord {
             id: uuid::Uuid::new_v4().to_string(),
@@ -255,21 +260,7 @@ impl EnvironmentRecordService {
             updated_at: now,
         };
 
-        // If the new record should be active immediately, apply env changes now.
-        if input.active {
-            let records_with_new: Vec<_> = std::iter::once(record.clone())
-                .chain(
-                    current_data
-                        .installations
-                        .iter()
-                        .filter(|i| i.environment == input.environment)
-                        .cloned(),
-                )
-                .collect();
-            self.apply_active_environment(&record, &records_with_new)
-                .await?;
-        }
-
+        // Step 1 – persist the record FIRST so it is never lost.
         let active_env = input.environment.clone();
         let is_active = input.active;
         let record_clone = record.clone();
@@ -286,6 +277,27 @@ impl EnvironmentRecordService {
                 current
             })
             .await?;
+
+        // Step 2 – apply system environment (symlink + registry).
+        // This is allowed to fail without losing the record.
+        if input.active {
+            let updated_data = self.read_data().await?;
+            let records_with_new: Vec<_> = std::iter::once(record.clone())
+                .chain(
+                    updated_data
+                        .installations
+                        .iter()
+                        .filter(|i| i.environment == input.environment && i.id != record.id)
+                        .cloned(),
+                )
+                .collect();
+            if let Err(e) = self.apply_active_environment(&record, &records_with_new).await {
+                eprintln!(
+                    "Warning: failed to apply active environment for {} (record saved): {}",
+                    record.id, e
+                );
+            }
+        }
 
         Ok(record)
     }
@@ -576,8 +588,9 @@ impl EnvironmentRecordService {
     /// Create (or replace) the directory junction at `.current/<env>` so that
     /// it points to the install path of *record*.
     ///
-    /// `std::os::windows::fs::symlink_junction` is a synchronous call, so we
-    /// offload it to `spawn_blocking`.
+    /// Uses `cmd.exe /c mklink /j` because the Rust standard library does not
+    /// provide a stable junction-creation API. Directory junctions do not
+    /// require `SeCreateSymbolicLinkPrivilege`, so this works without admin.
     async fn replace_current_link(
         &self,
         record: &InstallRecord,
@@ -602,10 +615,27 @@ impl EnvironmentRecordService {
             .map_err(|e| AppError::Message(format!("join error: {}", e)))?;
         }
 
-        // Create the new junction.
-        tokio::task::spawn_blocking(move || {
-            std::os::windows::fs::symlink_dir(&target_path, &link_path)
-                .map_err(|e| AppError::Message(format!("failed to create junction: {}", e)))
+        // Create the new junction using `mklink /j`.
+        // `symlink_dir` creates a true symbolic link that requires admin or Developer Mode.
+        // `mklink /j` creates a directory junction (reparse point) which works without
+        // elevated privileges, making it suitable for all users.
+        tokio::task::spawn_blocking(move || -> AppResult<()> {
+            let output = std::process::Command::new("cmd")
+                .args(["/c", "mklink", "/j", &link_path, &target_path])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output()
+                .map_err(|e| AppError::Message(format!("failed to run mklink: {}", e)))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                return Err(AppError::Message(format!(
+                    "failed to create junction: {} {}",
+                    stderr.trim(),
+                    stdout.trim()
+                )));
+            }
+            Ok(())
         })
         .await
         .map_err(|e| AppError::Message(format!("join error: {}", e)))??;

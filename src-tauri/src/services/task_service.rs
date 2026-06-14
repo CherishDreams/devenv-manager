@@ -403,9 +403,9 @@ impl TaskService {
                         .into_iter()
                         .find(|d| d.id == input.environment);
 
-                    {
+                    let record_saved = {
                         let env_rec = env_record.lock().await;
-                        let _ = env_rec
+                        env_rec
                             .add_managed_install(AddManagedInstallInput {
                                 environment: input.environment.clone(),
                                 name: definition
@@ -420,13 +420,25 @@ impl TaskService {
                                 env_vars: install_result.env_vars.clone(),
                                 path_entries: install_result.path_entries.clone(),
                             })
-                            .await;
-                    }
+                            .await
+                    };
 
-                    {
-                        let env_rec = env_record.lock().await;
-                        if let Ok(summary) = env_rec.get_summary().await {
-                            let _ = app_handle.emit("environments:changed", &summary);
+                    match record_saved {
+                        Ok(_) => {
+                            // Record saved successfully, refresh the summary.
+                            let env_rec = env_record.lock().await;
+                            if let Ok(summary) = env_rec.get_summary().await {
+                                let _ = app_handle.emit("environments:changed", &summary);
+                            }
+                        }
+                        Err(e) => {
+                            // Record save failed — report in task log but do not
+                            // mark the whole task as failed (files are already on disk).
+                            let _ = update_tx.send(TaskUpdate::Log {
+                                id: task_id.clone(),
+                                message: format!("保存安装记录失败: {}（安装文件已保留在磁盘上）", e),
+                                level: "warn".to_string(),
+                            });
                         }
                     }
 

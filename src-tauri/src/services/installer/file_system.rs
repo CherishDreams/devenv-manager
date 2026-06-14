@@ -1,13 +1,13 @@
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio_util::sync::CancellationToken;
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 use crate::services::common::shell::ps_quote;
 pub use crate::environment_records::helpers::path_exists;
 
 /// Ensure the install target directory exists and is empty.
-/// If it exists with content, throws an error.
-/// If it doesn't exist, creates the parent directory.
+/// If it exists with content (e.g. from a previous failed install), cleans it up
+/// so that the installation can proceed. If it doesn't exist, creates the parent.
 pub async fn ensure_empty_install_target(install_path: &str) -> AppResult<()> {
     let path = Path::new(install_path);
 
@@ -20,10 +20,10 @@ pub async fn ensure_empty_install_target(install_path: &str) -> AppResult<()> {
 
     let mut entries = fs::read_dir(install_path).await?;
     if entries.next_entry().await?.is_some() {
-        return Err(AppError::Message(format!(
-            "安装目录已存在且不为空：{}",
+        eprintln!(
+            "Install target directory is not empty, cleaning up leftover files: {}",
             install_path
-        )));
+        );
     }
 
     fs::remove_dir_all(install_path).await?;

@@ -155,15 +155,23 @@ async fn list_zulu_versions(config: &AppConfig) -> AppResult<Vec<AvailableVersio
 // ── Java (Liberica) ──────────────────────────────────────────────────────────
 
 async fn list_liberica_versions(config: &AppConfig) -> AppResult<Vec<AvailableVersion>> {
-    let candidates: Vec<i64> = (4..=30).rev().collect();
+    // Only query commonly-used LTS versions plus a few recent ones to reduce
+    // the number of concurrent HTTP requests (was 27, now 8).
+    let candidates: Vec<i64> = vec![21, 17, 11, 8, 23, 24, 25, 26];
     let futures: Vec<_> = candidates.iter().map(|&major| {
         let url = format!(
             "https://api.bell-sw.com/v1/liberica/releases?version-feature={}&version-modifier=latest&bitness=64&release-type=all&os=windows&arch=x86&package-type=zip&bundle-type=jdk",
             major
         );
         async move {
-            fetch_json::<Vec<LibericaRelease>>(&url, config).await.ok()
-                .and_then(|releases| releases.into_iter().find(|r| r.ga && r.package_type == "zip"))
+            let result = fetch_json::<Vec<LibericaRelease>>(&url, config).await;
+            match result {
+                Ok(releases) => releases.into_iter().find(|r| r.ga && r.package_type == "zip"),
+                Err(e) => {
+                    eprintln!("Warning: failed to fetch Liberica JDK {} versions: {}", major, e);
+                    None
+                }
+            }
         }
     }).collect();
 
@@ -171,6 +179,12 @@ async fn list_liberica_versions(config: &AppConfig) -> AppResult<Vec<AvailableVe
         .into_iter()
         .flatten()
         .collect();
+
+    if releases.is_empty() {
+        return Err(crate::error::AppError::Message(
+            "BellSoft Liberica 版本获取结果为空，请检查网络连接".to_string(),
+        ));
+    }
 
     let mut sorted = releases;
     sorted.sort_by_key(|item| std::cmp::Reverse(item.feature_version));
@@ -203,6 +217,12 @@ async fn list_oracle_versions(config: &AppConfig) -> AppResult<Vec<AvailableVers
         .collect();
     majors.sort_by(|a, b| b.cmp(a));
     majors.dedup();
+
+    if majors.is_empty() {
+        return Err(crate::error::AppError::Message(
+            "Oracle JDK 下载页未能解析到版本信息（页面可能依赖 JavaScript 渲染），将使用内置目录".to_string(),
+        ));
+    }
 
     let lts_majors = [21i64, 17, 11, 8];
     Ok(majors.into_iter()

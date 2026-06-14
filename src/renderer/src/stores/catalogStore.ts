@@ -41,6 +41,25 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     try {
       const versions = await envManagerApi.catalog.listVersions(query);
+
+      // When the backend returns an empty list (e.g. network issues silently
+      // swallowed on the Rust side), fall back to the built-in static catalog
+      // so the user still sees installable versions.
+      if (versions.length === 0) {
+        const fallback = getStaticVersions(query);
+        if (fallback.length > 0) {
+          const fallbackVersions = fallback.map((v) => ({
+            ...v,
+            notes: "在线获取结果为空，已使用内置目录",
+          }));
+          set((state) => ({
+            versionsByKey: { ...state.versionsByKey, [key]: fallbackVersions },
+            loadingByKey: { ...state.loadingByKey, [key]: false },
+          }));
+          return fallbackVersions;
+        }
+      }
+
       set((state) => ({
         versionsByKey: {
           ...state.versionsByKey,

@@ -1183,6 +1183,95 @@ body.theme-liquid-glass::after {
   box-shadow: 0 4px 12px rgba(20, 31, 58, 0.05);
 }
 
+/* ── Task Popover ─────────────────────────────────────────────────── */
+.task-popover .ant-popover-inner {
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-radius: 12px;
+}
+
+.task-popover-content {
+  width: 320px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 12px 0;
+}
+
+.task-popover-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+}
+
+.task-popover-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.task-popover-item {
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(200, 213, 230, 0.25);
+}
+
+.task-popover-item:last-child {
+  border-bottom: none;
+}
+
+.task-popover-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-popover-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.task-popover-item-download {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  margin-top: 2px;
+}
+
+.task-popover-item-error {
+  font-size: 12px;
+  color: #cf1322;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-popover-link {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  margin-top: 4px;
+  border: none;
+  background: transparent;
+  color: var(--primary-color);
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.task-popover-link:hover {
+  background: rgba(23, 105, 232, 0.06);
+}
+
 .app-content {
   height: auto;
   min-height: 0;

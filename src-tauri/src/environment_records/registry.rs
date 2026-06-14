@@ -224,7 +224,7 @@ async fn backup_registry(app_handle: &AppHandle, scope: &str) -> AppResult<()> {
     let status = tokio::process::Command::new("reg")
         .args([
             "export",
-            &format!("\"{reg_path}\""),
+            reg_path,
             &file_str,
             "/y",
         ])

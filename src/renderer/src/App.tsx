@@ -1,14 +1,20 @@
 import type React from "react";
+import type { TaskStatus } from "@shared/types";
 import {
   AppstoreOutlined,
   BellOutlined,
   BgColorsOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CloseCircleOutlined,
   DashboardOutlined,
   FileTextOutlined,
   SettingOutlined,
+  StopOutlined,
+  SyncOutlined,
   ToolOutlined,
 } from "@ant-design/icons";
-import { App as AntdApp, Badge, Button, ConfigProvider, Spin, Switch, Tooltip, Typography } from "antd";
+import { App as AntdApp, Badge, Button, ConfigProvider, Popover, Progress, Spin, Switch, Tag, Tooltip, Typography } from "antd";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { AppLogo } from "./components/AppLogo";
 import { useConfigStore } from "./stores/configStore";
@@ -79,6 +85,85 @@ function renderPage(pageKey: PageKey): React.ReactNode {
   }
 }
 
+const taskStatusMeta: Record<TaskStatus, { text: string; color: string; icon: React.ReactNode }> = {
+  queued: { text: "排队中", color: "default", icon: <ClockCircleOutlined /> },
+  running: { text: "运行中", color: "processing", icon: <SyncOutlined spin /> },
+  succeeded: { text: "成功", color: "success", icon: <CheckCircleOutlined /> },
+  failed: { text: "失败", color: "error", icon: <CloseCircleOutlined /> },
+  cancelled: { text: "已取消", color: "default", icon: <StopOutlined /> },
+};
+
+function TaskPopoverContent(): React.ReactElement {
+  const tasks = useTaskStore((state) => state.tasks);
+
+  const displayTasks = useMemo(() => {
+    const active = tasks.filter((t) => t.status === "running" || t.status === "queued");
+    const recent = tasks
+      .filter((t) => t.status !== "running" && t.status !== "queued")
+      .slice(0, 3);
+    return [...active, ...recent].slice(0, 8);
+  }, [tasks]);
+
+  const navigateToLogs = () => {
+    window.dispatchEvent(new CustomEvent("env-manager:navigate", { detail: "logs" }));
+  };
+
+  if (displayTasks.length === 0) {
+    return (
+      <div className="task-popover-content">
+        <div className="task-popover-empty">暂无任务</div>
+        <button className="task-popover-link" onClick={navigateToLogs} type="button">
+          查看日志
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="task-popover-content">
+      <ul className="task-popover-list">
+        {displayTasks.map((task) => {
+          const meta = taskStatusMeta[task.status];
+          return (
+            <li key={task.id} className="task-popover-item">
+              <div className="task-popover-item-header">
+                <span className="task-popover-item-title">{task.title}</span>
+                <Tag icon={meta.icon} color={meta.color} bordered={false} style={{ marginRight: 0 }}>
+                  {meta.text}
+                </Tag>
+              </div>
+              {task.status === "running" && task.progress > 0 && (
+                <Progress
+                  percent={Math.round(task.progress)}
+                  size="small"
+                  showInfo={false}
+                  strokeColor="var(--primary-color)"
+                  style={{ marginTop: 4 }}
+                />
+              )}
+              {task.status === "running" && task.download && !task.download.completed && (
+                <div className="task-popover-item-download">
+                  {task.download.percent != null
+                    ? `下载中 ${Math.round(task.download.percent)}%`
+                    : "下载中…"}
+                </div>
+              )}
+              {task.status === "failed" && task.logs.length > 0 && (
+                <div className="task-popover-item-error">
+                  {task.logs[task.logs.length - 1].message}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <button className="task-popover-link" onClick={navigateToLogs} type="button">
+        查看全部日志
+      </button>
+    </div>
+  );
+}
+
 function HeaderStatus(): React.ReactElement {
   const runningTaskCount = useTaskStore((state) => state.tasks.filter((task) => task.status === "running").length);
   const { themeStyle, setThemeStyle } = useUiStore();
@@ -95,11 +180,19 @@ function HeaderStatus(): React.ReactElement {
           onChange={(checked) => setThemeStyle(checked ? "liquidGlass" : "default")}
         />
       </Tooltip>
-      <Tooltip title="运行中的任务">
-        <Badge count={runningTaskCount} size="small">
-          <Button icon={<BellOutlined />} />
-        </Badge>
-      </Tooltip>
+      <Popover
+        content={<TaskPopoverContent />}
+        trigger="click"
+        placement="bottomRight"
+        overlayClassName="task-popover"
+        arrow={false}
+      >
+        <Tooltip title="任务列表">
+          <Badge count={runningTaskCount} size="small">
+            <Button icon={<BellOutlined />} />
+          </Badge>
+        </Tooltip>
+      </Popover>
     </div>
   );
 }
