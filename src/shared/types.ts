@@ -46,6 +46,7 @@ export type EnvironmentGroup = "编程语言" | "Python" | "JavaScript" | "构�
 export interface EnvironmentManagementSettings {
   mode: EnvironmentManagementMode;
   envScope: EnvironmentVariableScope;
+  pendingEnvScope?: EnvironmentVariableScope;
 }
 
 export interface AppearanceSettings {

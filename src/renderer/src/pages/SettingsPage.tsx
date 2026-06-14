@@ -121,6 +121,29 @@ export function SettingsPage(): React.ReactElement {
 
     // If scope changed, use the dedicated migration API.
     if (newScope && oldScope && newScope !== oldScope) {
+      // Switching to system scope requires administrator privileges.
+      if (newScope === "system") {
+        const status = await envManagerApi.system.getStatus();
+        if (!status.isAdministrator) {
+          const confirmed = await new Promise<boolean>((resolve) => {
+            modal.confirm({
+              title: "需要管理员权限",
+              content:
+                "写入系统级环境变量需要管理员权限。确认后将以管理员身份重启应用，并自动完成环境变量迁移。",
+              okText: "授权并重启",
+              cancelText: "取消",
+              onOk: () => resolve(true),
+              onCancel: () => resolve(false),
+            });
+          });
+          if (!confirmed) return;
+
+          // This will save pendingEnvScope, relaunch as admin, and exit.
+          await envManagerApi.config.relaunchAsAdmin(newScope);
+          return; // Current process is exiting.
+        }
+      }
+
       await envManagerApi.config.switchEnvScope(newScope);
       // Update config store to reflect the change.
       await update({

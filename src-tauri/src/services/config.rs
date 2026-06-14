@@ -28,6 +28,10 @@ pub struct AppearanceConfig {
 pub struct EnvironmentManagementConfig {
     pub mode: String, // "symlink" | "direct"
     pub env_scope: String, // "user" | "system"
+    /// When set, indicates a pending scope migration that requires admin
+    /// privileges. The app applies it on next startup and clears the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_env_scope: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +58,7 @@ impl Default for AppConfig {
             environment_management: EnvironmentManagementConfig {
                 mode: "symlink".to_string(),
                 env_scope: "user".to_string(),
+                pending_env_scope: None,
             },
             proxy: ProxyConfig {
                 enabled: false,

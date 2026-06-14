@@ -318,6 +318,10 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
           },
         };
       },
+      relaunchAsAdmin: async () => {
+        // Mock: no actual restart in browser mode.
+        console.warn("[mock] relaunchAsAdmin called — no-op in mock mode");
+      },
     },
     system: {
       getStatus: async () => mockSystemStatus,
