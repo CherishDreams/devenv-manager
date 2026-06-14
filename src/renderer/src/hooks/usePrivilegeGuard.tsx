@@ -87,7 +87,7 @@ export function usePrivilegeGuard(): {
             <Space direction="vertical" size={12} className="full-width">
               <Alert type="warning" showIcon message={requirement.reason} />
               <Typography.Text type="secondary">
-                当前版本尚未实现自动提权/重启；请以管理员身份重新启动应用后重试该操作。
+                授权后应用会以管理员身份重启，请重新执行当前操作。
               </Typography.Text>
             </Space>
           ),
@@ -119,8 +119,15 @@ export function usePrivilegeGuard(): {
         return undefined;
       }
 
+      // When the authorization mode is "restart-app", the user confirmed the
+      // elevation dialog.  Actually relaunch as administrator — the current
+      // process will exit, and the elevated instance will pick up where we
+      // left off.  Without this, `action(true)` merely passes a boolean flag
+      // to the backend which has no effect on OS-level privileges.
       if (requirement.authorizationMode === "restart-app") {
-        return undefined;
+        const config = await envManagerApi.config.get();
+        await envManagerApi.config.relaunchAsAdmin(config.environmentManagement.envScope);
+        return undefined; // Process is exiting; never resolves for the caller.
       }
 
       return action(true);

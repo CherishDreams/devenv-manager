@@ -121,15 +121,18 @@ export function SettingsPage(): React.ReactElement {
 
     // If scope changed, use the dedicated migration API.
     if (newScope && oldScope && newScope !== oldScope) {
-      // Switching to system scope requires administrator privileges.
-      if (newScope === "system") {
+      // Any scope change involving "system" requires administrator privileges:
+      // - user→system: writing to HKLM
+      // - system→user: cleaning up HKLM entries before migrating to HKCU
+      const involvesSystem = oldScope === "system" || newScope === "system";
+      if (involvesSystem) {
         const status = await envManagerApi.system.getStatus();
         if (!status.isAdministrator) {
           const confirmed = await new Promise<boolean>((resolve) => {
             modal.confirm({
               title: "需要管理员权限",
               content:
-                "写入系统级环境变量需要管理员权限。确认后将以管理员身份重启应用，并自动完成环境变量迁移。",
+                "切换环境变量作用范围需要访问系统级注册表。确认后将以管理员身份重启应用，并自动完成环境变量迁移。",
               okText: "授权并重启",
               cancelText: "取消",
               onOk: () => resolve(true),
@@ -144,16 +147,20 @@ export function SettingsPage(): React.ReactElement {
         }
       }
 
-      await envManagerApi.config.switchEnvScope(newScope);
-      // Update config store to reflect the change.
-      await update({
-        ...values,
-        environmentManagement: {
-          ...values.environmentManagement!,
-          envScope: newScope as EnvironmentVariableScope,
-        },
-      });
-      message.success("环境变量写入位置已切换，已有变量已迁移");
+      try {
+        await envManagerApi.config.switchEnvScope(newScope);
+        // Update config store to reflect the change.
+        await update({
+          ...values,
+          environmentManagement: {
+            ...values.environmentManagement!,
+            envScope: newScope as EnvironmentVariableScope,
+          },
+        });
+        message.success("环境变量写入位置已切换，已有变量已迁移");
+      } catch (error) {
+        message.error(`环境变量切换失败：${error instanceof Error ? error.message : String(error)}`);
+      }
     } else {
       await update(values);
       message.success("设置已保存");
