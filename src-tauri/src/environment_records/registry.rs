@@ -24,6 +24,122 @@ use crate::shared::types::{EnvironmentApplyPlan, EnvironmentCleanupPlan};
 const USER_ENV_KEY: &str = "Environment";
 const SYSTEM_ENV_KEY: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
 
+/// Broadcast `WM_SETTINGCHANGE` with `lParam = "Environment"` so that
+/// Explorer, new CMD windows, and other processes pick up the updated
+/// environment variables written to the registry.
+fn broadcast_env_change() {
+    #[cfg(windows)]
+    {
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
+
+        // Minimal FFI — avoids pulling in the full `windows` or `winapi` crate.
+        extern "system" {
+            fn SendMessageTimeoutW(
+                hwnd: isize,
+                msg: u32,
+                wparam: usize,
+                lparam: isize,
+                flags: u32,
+                timeout: u32,
+                result: *mut usize,
+            ) -> isize;
+        }
+
+        const HWND_BROADCAST: isize = 0xFFFF;
+        const WM_SETTINGCHANGE: u32 = 0x001A;
+        const SMTO_ABORTIFHUNG: u32 = 0x0002;
+
+        let wide: Vec<u16> = OsStr::new("Environment")
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+
+        unsafe {
+            let mut result: usize = 0;
+            SendMessageTimeoutW(
+                HWND_BROADCAST,
+                WM_SETTINGCHANGE,
+                0,
+                wide.as_ptr() as isize,
+                SMTO_ABORTIFHUNG,
+                5000,
+                &mut result,
+            );
+        }
+    }
+}
+
+// ── Unified commit pipeline ──────────────────────────────────────────────────
+
+/// Describes the net effect of an environment mutation so that the actual
+/// registry writes, process-env synchronisation, and system broadcast can be
+/// performed by a single function ([`commit_env_mutations`]).
+///
+/// Public entry-points (`apply_registry_plan`, `cleanup_registry_plan`,
+/// `cleanup_scope`) are responsible only for computing *what* should change;
+/// they delegate the *how* to the commit pipeline.
+struct EnvCommit {
+    /// Key-value pairs to write (`Some(value)`) or delete (`None`).
+    writes: Vec<(String, Option<String>)>,
+    /// Variable names to remove from the current process env block.
+    process_removes: Vec<String>,
+    /// Variable-name → value pairs to set in the current process env block.
+    process_sets: Vec<(String, String)>,
+}
+
+/// Single chokepoint for all environment registry mutations.
+///
+/// 1. Backs up the registry key (silently spawns `reg.exe` with no window).
+/// 2. Executes writes / deletes against the target scope.
+/// 3. Synchronises the running process environment block.
+/// 4. Broadcasts `WM_SETTINGCHANGE` so Explorer, new CMD windows, etc.
+///    pick up the changes.
+async fn commit_env_mutations(
+    app_handle: &AppHandle,
+    scope: &str,
+    commit: &EnvCommit,
+) -> AppResult<()> {
+    if commit.writes.is_empty() {
+        return Ok(());
+    }
+
+    backup_registry(app_handle, scope).await?;
+
+    for (name, value) in &commit.writes {
+        match value {
+            Some(v) => {
+                let is_expand = v.contains('%');
+                write_env_value(scope, name, v, is_expand).await?;
+            }
+            None => {
+                delete_env_value(scope, name).await?;
+            }
+        }
+    }
+
+    // Sync the current process environment block.
+    // SAFETY: Windows env-var API is thread-safe; no concurrent modifier.
+    for name in &commit.process_removes {
+        unsafe { std::env::remove_var(name); }
+    }
+    for (name, value) in &commit.process_sets {
+        unsafe { std::env::set_var(name, value); }
+    }
+
+    broadcast_env_change();
+    Ok(())
+}
+
+/// Determine the correct `Path` / `PATH` key name for the current process.
+fn process_path_key() -> &'static str {
+    if std::env::var("Path").is_err() && std::env::var("PATH").is_ok() {
+        "PATH"
+    } else {
+        "Path"
+    }
+}
+
 // ── Scope resolution ─────────────────────────────────────────────────────────
 
 /// Returns `(hive, subkey_path)` for the given scope string.
@@ -228,6 +344,7 @@ async fn backup_registry(app_handle: &AppHandle, scope: &str) -> AppResult<()> {
             &file_str,
             "/y",
         ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .status()
         .await?;
 
@@ -330,7 +447,7 @@ pub async fn apply_registry_plan(
 
     let current = read_env_values(scope, &names).await?;
 
-    // Build list of (name, Option<value>) writes to perform.
+    // ── Compute diff ────────────────────────────────────────────────────
     let mut writes: Vec<(String, Option<String>)> = Vec::new();
 
     for (name, desired) in &plan.env_vars {
@@ -340,7 +457,6 @@ pub async fn apply_registry_plan(
         }
     }
 
-    // Calculate new Path value.
     let cur_path = current
         .get("Path")
         .and_then(|v| v.as_ref())
@@ -358,42 +474,20 @@ pub async fn apply_registry_plan(
         return Ok(());
     }
 
-    // Backup before mutating.
-    backup_registry(app_handle, scope).await?;
+    // ── Build commit & delegate ─────────────────────────────────────────
+    let mut process_sets: Vec<(String, String)> = plan
+        .env_vars
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    process_sets.push((process_path_key().to_string(), new_path));
 
-    // Execute all writes.
-    for (name, value) in &writes {
-        match value {
-            Some(v) => {
-                // Use REG_EXPAND_SZ when the value contains %VAR% references.
-                let is_expand = v.contains('%');
-                write_env_value(scope, name, v, is_expand).await?;
-            }
-            None => {
-                delete_env_value(scope, name).await?;
-            }
-        }
-    }
-
-    // Synchronize the current process environment.
-    // SAFETY: These calls occur within the registry update path on Windows.
-    // The Windows API for environment variables is thread-safe, and no other
-    // threads concurrently modify the process environment block.
-    for (name, value) in &plan.env_vars {
-        unsafe { std::env::set_var(name, value); }
-    }
-
-    // Update Path / PATH in the current process.
-    let path_key =
-        if std::env::var("Path").is_err() && std::env::var("PATH").is_ok() {
-            "PATH"
-        } else {
-            "Path"
-        };
-    // SAFETY: See above — single-threaded environment update path on Windows.
-    unsafe { std::env::set_var(path_key, &new_path); }
-
-    Ok(())
+    commit_env_mutations(app_handle, scope, &EnvCommit {
+        writes,
+        process_removes: Vec::new(),
+        process_sets,
+    })
+    .await
 }
 
 /// Apply an [`EnvironmentCleanupPlan`] to the environment registry at the given scope.
@@ -415,7 +509,7 @@ pub async fn cleanup_registry_plan(
 
     let current = read_env_values(scope, &names).await?;
 
-    // Determine which env_vars currently match and need deletion.
+    // ── Compute diff ────────────────────────────────────────────────────
     let mut deletes: Vec<String> = Vec::new();
     for (name, value) in &plan.env_vars {
         let cur = current.get(name.as_str()).and_then(|v| v.as_ref());
@@ -424,7 +518,6 @@ pub async fn cleanup_registry_plan(
         }
     }
 
-    // Calculate new Path after removing entries.
     let cur_path = current
         .get("Path")
         .and_then(|v| v.as_ref())
@@ -437,41 +530,24 @@ pub async fn cleanup_registry_plan(
         return Ok(());
     }
 
-    // Backup before mutating.
-    backup_registry(app_handle, scope).await?;
+    // ── Build commit & delegate ─────────────────────────────────────────
+    let mut writes: Vec<(String, Option<String>)> = deletes
+        .iter()
+        .map(|name| (name.clone(), None))
+        .collect();
 
-    // Delete matching env vars.
-    for name in &deletes {
-        delete_env_value(scope, name).await?;
-    }
-
-    // Write updated Path if it changed.
+    let mut process_sets = Vec::new();
     if path_changed {
-        write_env_value(scope, "Path", &new_path, new_path.contains('%'))
-            .await?;
+        writes.push(("Path".to_string(), Some(new_path.clone())));
+        process_sets.push((process_path_key().to_string(), new_path));
     }
 
-    // Clean the current process environment.
-    // SAFETY: These calls occur within the registry cleanup path on Windows.
-    // The Windows API for environment variables is thread-safe, and no other
-    // threads concurrently modify the process environment block.
-    for name in &deletes {
-        unsafe { std::env::remove_var(name); }
-    }
-
-    if path_changed {
-        let path_key = if std::env::var("Path").is_err()
-            && std::env::var("PATH").is_ok()
-        {
-            "PATH"
-        } else {
-            "Path"
-        };
-        // SAFETY: See above — single-threaded environment cleanup path on Windows.
-        unsafe { std::env::set_var(path_key, &new_path); }
-    }
-
-    Ok(())
+    commit_env_mutations(app_handle, scope, &EnvCommit {
+        writes,
+        process_removes: deletes,
+        process_sets,
+    })
+    .await
 }
 
 /// Remove all app-managed environment variable values and PATH entries from
@@ -487,7 +563,7 @@ pub async fn cleanup_scope(
 
     let current = read_env_values(scope, &names).await?;
 
-    // Collect env vars that exist at this scope and need deletion.
+    // ── Compute diff ────────────────────────────────────────────────────
     let mut deletes: Vec<String> = Vec::new();
     for name in env_var_names {
         if current.get(name.as_str()).and_then(|v| v.as_ref()).is_some() {
@@ -495,7 +571,6 @@ pub async fn cleanup_scope(
         }
     }
 
-    // Calculate new Path after removing entries.
     let cur_path = current
         .get("Path")
         .and_then(|v| v.as_ref())
@@ -507,36 +582,24 @@ pub async fn cleanup_scope(
         return Ok(());
     }
 
-    // Backup before mutating.
-    backup_registry(app_handle, scope).await?;
+    // ── Build commit & delegate ─────────────────────────────────────────
+    let mut writes: Vec<(String, Option<String>)> = deletes
+        .iter()
+        .map(|name| (name.clone(), None))
+        .collect();
 
-    // Delete env vars.
-    for name in &deletes {
-        delete_env_value(scope, name).await?;
-    }
-
-    // Write updated Path if it changed.
+    let mut process_sets = Vec::new();
     if path_changed {
-        write_env_value(scope, "Path", &new_path, new_path.contains('%'))
-            .await?;
+        writes.push(("Path".to_string(), Some(new_path.clone())));
+        process_sets.push((process_path_key().to_string(), new_path));
     }
 
-    // Sync process environment.
-    for name in &deletes {
-        unsafe { std::env::remove_var(name); }
-    }
-    if path_changed {
-        let path_key = if std::env::var("Path").is_err()
-            && std::env::var("PATH").is_ok()
-        {
-            "PATH"
-        } else {
-            "Path"
-        };
-        unsafe { std::env::set_var(path_key, &new_path); }
-    }
-
-    Ok(())
+    commit_env_mutations(app_handle, scope, &EnvCommit {
+        writes,
+        process_removes: deletes,
+        process_sets,
+    })
+    .await
 }
 
 /// Synchronize the current process environment with the registry
