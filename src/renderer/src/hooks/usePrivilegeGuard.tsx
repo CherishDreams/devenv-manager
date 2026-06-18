@@ -87,7 +87,7 @@ export function usePrivilegeGuard(): {
             <Space direction="vertical" size={12} className="full-width">
               <Alert type="warning" showIcon message={requirement.reason} />
               <Typography.Text type="secondary">
-                授权后应用会以管理员身份重启，并自动继续创建任务。
+                当前版本尚未实现自动提权/重启；请以管理员身份重新启动应用后重试该操作。
               </Typography.Text>
             </Space>
           ),
