@@ -14,8 +14,12 @@ pub async fn run_process(
 ) -> AppResult<(String, String)> {
     let mut cmd = Command::new(command);
     cmd.args(args);
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
     if let Some(env) = extra_env {
         cmd.envs(env);
     }
