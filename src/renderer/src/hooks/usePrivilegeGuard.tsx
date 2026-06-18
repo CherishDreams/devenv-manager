@@ -119,6 +119,10 @@ export function usePrivilegeGuard(): {
         return undefined;
       }
 
+      if (requirement.authorizationMode === "restart-app") {
+        return undefined;
+      }
+
       return action(true);
     },
     [promptForPrivilege],
