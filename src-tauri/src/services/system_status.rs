@@ -21,7 +21,9 @@ impl SystemStatusService {
     }
 
     pub async fn is_administrator(&self) -> bool {
-        if cfg!(windows) {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
             // On Windows, check if we can run net session
             Command::new("net")
                 .arg("session")
@@ -29,7 +31,10 @@ impl SystemStatusService {
                 .output()
                 .await
                 .is_ok_and(|output| output.status.success())
-        } else {
+        }
+
+        #[cfg(not(windows))]
+        {
             // On Unix, check if uid is 0
             #[cfg(unix)]
             {
@@ -38,7 +43,9 @@ impl SystemStatusService {
                 unsafe { libc::geteuid() == 0 }
             }
             #[cfg(not(unix))]
-            { false }
+            {
+                false
+            }
         }
     }
 
