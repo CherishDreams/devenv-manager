@@ -192,8 +192,8 @@ export default function LogsPage(): React.ReactElement {
   const handleRetryTask = useCallback(
     async (record: ManagedTask) => {
       try {
-        const task = await runWithPrivilege({ type: "retry", id: record.id }, (authorized) =>
-          retry(record.id, authorized),
+        const task = await runWithPrivilege({ type: "retry", id: record.id }, () =>
+          retry(record.id),
         );
 
         if (task) {

@@ -8,9 +8,9 @@ interface TaskState {
   loading: boolean;
   error?: string;
   load: () => Promise<void>;
-  createInstall: (input: InstallTaskInput, authorized?: boolean) => Promise<ManagedTask>;
+  createInstall: (input: InstallTaskInput) => Promise<ManagedTask>;
   cancel: (id: string) => Promise<void>;
-  retry: (id: string, authorized?: boolean) => Promise<ManagedTask>;
+  retry: (id: string) => Promise<ManagedTask>;
   remove: (id: string) => Promise<void>;
   clearFinished: () => Promise<void>;
   subscribeToTaskEvents: () => () => void;
@@ -30,10 +30,10 @@ export const useTaskStore = create<TaskState>((set) => ({
       set({ error: `加载任务列表失败: ${getErrorMessage(error)}`, loading: false });
     }
   },
-  createInstall: async (input, authorized = false) => {
+  createInstall: async (input) => {
     set({ loading: true, error: undefined });
     try {
-      const task = await envManagerApi.tasks.createInstall(input, authorized);
+      const task = await envManagerApi.tasks.createInstall(input);
       set((state) => ({
         tasks: [task, ...state.tasks.filter((item) => item.id !== task.id)],
         loading: false,
@@ -59,10 +59,10 @@ export const useTaskStore = create<TaskState>((set) => ({
       throw error;
     }
   },
-  retry: async (id, authorized = false) => {
+  retry: async (id) => {
     set({ loading: true, error: undefined });
     try {
-      const task = await envManagerApi.tasks.retry(id, authorized);
+      const task = await envManagerApi.tasks.retry(id);
       set((state) => ({
         tasks: state.tasks.map((item) => (item.id === task.id ? task : item)),
         loading: false,

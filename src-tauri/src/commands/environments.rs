@@ -44,8 +44,6 @@ pub async fn environments_set_active(
     state: State<'_, AppState>,
     environment: EnvironmentKind,
     id: String,
-    // TODO: verify elevation authorization before performing write operations
-    _authorized: bool,
 ) -> AppResult<EnvironmentSummary> {
     let summary = {
         let env_record = state.environment_record.lock().await;
@@ -61,8 +59,6 @@ pub async fn environments_uninstall(
     app: AppHandle,
     state: State<'_, AppState>,
     id: String,
-    // TODO: verify elevation authorization before performing write operations
-    _authorized: bool,
 ) -> AppResult<EnvironmentSummary> {
     let summary = {
         let env_record = state.environment_record.lock().await;

@@ -19,8 +19,8 @@ export function useEnvironmentActions(): {
       try {
         const completed = await runWithPrivilege(
           { type: "set-active", environment: record.environment, id: record.id },
-          async (authorized) => {
-            await setActive(record.environment, record.id, authorized);
+          async () => {
+            await setActive(record.environment, record.id);
             return true;
           },
         );
@@ -38,8 +38,8 @@ export function useEnvironmentActions(): {
   const uninstallRecord = useCallback(
     async (record: InstallRecord) => {
       try {
-        const completed = await runWithPrivilege({ type: "uninstall", id: record.id }, async (authorized) => {
-          await uninstall(record.id, authorized);
+        const completed = await runWithPrivilege({ type: "uninstall", id: record.id }, async () => {
+          await uninstall(record.id);
           return true;
         });
 

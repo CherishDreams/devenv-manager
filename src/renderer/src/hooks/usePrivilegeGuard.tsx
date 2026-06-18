@@ -23,7 +23,6 @@ async function checkPrivilegeRequirement(input: PrivilegeCheckInput): Promise<Pr
   if (status.isAdministrator) {
     return {
       required: false,
-      authorized: false,
       reason: "",
       canSwitchToSymlink: false,
       currentMode: config.environmentManagement.mode,
@@ -47,7 +46,6 @@ async function checkPrivilegeRequirement(input: PrivilegeCheckInput): Promise<Pr
 
   return {
     required,
-    authorized: false,
     reason,
     canSwitchToSymlink: false,
     currentMode: config.environmentManagement.mode,
@@ -58,7 +56,7 @@ async function checkPrivilegeRequirement(input: PrivilegeCheckInput): Promise<Pr
 export function usePrivilegeGuard(): {
   runWithPrivilege: <T>(
     input: PrivilegeCheckInput,
-    action: (authorized: boolean) => Promise<T>,
+    action: () => Promise<T>,
   ) => Promise<T | undefined>;
 } {
   const { modal } = AntdApp.useApp();
@@ -102,15 +100,11 @@ export function usePrivilegeGuard(): {
   );
 
   const runWithPrivilege = useCallback(
-    async <T,>(input: PrivilegeCheckInput, action: (authorized: boolean) => Promise<T>): Promise<T | undefined> => {
+    async <T,>(input: PrivilegeCheckInput, action: () => Promise<T>): Promise<T | undefined> => {
       const requirement = await checkPrivilegeRequirement(input);
 
       if (!requirement.required) {
-        return action(false);
-      }
-
-      if (requirement.authorized) {
-        return action(true);
+        return action();
       }
 
       const choice = await promptForPrivilege(requirement);
@@ -122,15 +116,14 @@ export function usePrivilegeGuard(): {
       // When the authorization mode is "restart-app", the user confirmed the
       // elevation dialog.  Actually relaunch as administrator — the current
       // process will exit, and the elevated instance will pick up where we
-      // left off.  Without this, `action(true)` merely passes a boolean flag
-      // to the backend which has no effect on OS-level privileges.
+      // left off.
       if (requirement.authorizationMode === "restart-app") {
         const config = await envManagerApi.config.get();
         await envManagerApi.config.relaunchAsAdmin(config.environmentManagement.envScope);
         return undefined; // Process is exiting; never resolves for the caller.
       }
 
-      return action(true);
+      return action();
     },
     [promptForPrivilege],
   );

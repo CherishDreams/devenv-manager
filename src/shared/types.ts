@@ -193,7 +193,6 @@ export type PrivilegeCheckInput =
 
 export interface PrivilegeRequirement {
   required: boolean;
-  authorized: boolean;
   reason: string;
   canSwitchToSymlink: boolean;
   currentMode: EnvironmentManagementMode;

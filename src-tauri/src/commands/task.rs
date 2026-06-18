@@ -15,8 +15,6 @@ pub async fn tasks_list(state: State<'_, AppState>) -> AppResult<Vec<ManagedTask
 pub async fn tasks_create_install(
     state: State<'_, AppState>,
     input: InstallTaskInput,
-    // TODO: verify elevation authorization before performing write operations
-    _authorized: bool,
 ) -> AppResult<ManagedTask> {
     let mut svc = state.task.lock().await;
     Ok(svc.create_install_task(input).await)
@@ -37,8 +35,6 @@ pub async fn tasks_cancel(
 pub async fn tasks_retry(
     state: State<'_, AppState>,
     id: String,
-    // TODO: verify elevation authorization before performing write operations
-    _authorized: bool,
 ) -> AppResult<ManagedTask> {
     let mut svc = state.task.lock().await;
     svc.retry_task(&id).await
@@ -134,7 +130,6 @@ pub async fn permissions_check(
 
     Ok(PrivilegeRequirement {
         required,
-        authorized: false,
         reason,
         can_switch_to_symlink,
         current_mode,

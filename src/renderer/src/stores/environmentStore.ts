@@ -11,8 +11,8 @@ interface EnvironmentState {
   load: () => Promise<void>;
   discoverExisting: (force?: boolean) => Promise<DiscoveredEnvironment[]>;
   adoptExisting: (inputs: AdoptEnvironmentInput[]) => Promise<void>;
-  setActive: (environment: EnvironmentKind, id: string, authorized?: boolean) => Promise<void>;
-  uninstall: (id: string, authorized?: boolean) => Promise<void>;
+  setActive: (environment: EnvironmentKind, id: string) => Promise<void>;
+  uninstall: (id: string) => Promise<void>;
   subscribeToEnvironmentEvents: () => () => void;
 }
 
@@ -58,10 +58,10 @@ export const useEnvironmentStore = create<EnvironmentState>((set, get) => ({
       throw error;
     }
   },
-  setActive: async (environment, id, authorized = false) => {
+  setActive: async (environment, id) => {
     set({ loading: true, error: undefined });
     try {
-      const summary = await envManagerApi.environments.setActive(environment, id, authorized);
+      const summary = await envManagerApi.environments.setActive(environment, id);
       set({ summary, loading: false });
     } catch (error) {
       console.error("[environmentStore] Failed to switch:", error);
@@ -69,10 +69,10 @@ export const useEnvironmentStore = create<EnvironmentState>((set, get) => ({
       throw error;
     }
   },
-  uninstall: async (id, authorized = false) => {
+  uninstall: async (id) => {
     set({ loading: true, error: undefined });
     try {
-      const summary = await envManagerApi.environments.uninstall(id, authorized);
+      const summary = await envManagerApi.environments.uninstall(id);
       set({ summary, loading: false });
     } catch (error) {
       console.error("[environmentStore] Failed to uninstall:", error);

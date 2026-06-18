@@ -161,7 +161,7 @@ export function OperationArea({ definition }: { definition: EnvironmentDefinitio
       databaseConfig,
     };
 
-    const task = await runWithPrivilege({ type: "install", input }, (authorized) => createInstall(input, authorized));
+    const task = await runWithPrivilege({ type: "install", input }, () => createInstall(input));
 
     if (!task) {
       return;

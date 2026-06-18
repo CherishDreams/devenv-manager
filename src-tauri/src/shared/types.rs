@@ -347,7 +347,6 @@ pub enum PrivilegeCheckInput {
 #[serde(rename_all = "camelCase")]
 pub struct PrivilegeRequirement {
     pub required: bool,
-    pub authorized: bool,
     pub reason: String,
     pub can_switch_to_symlink: bool,
     pub current_mode: EnvironmentManagementMode,

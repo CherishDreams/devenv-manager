@@ -351,7 +351,6 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
 
         return {
           required,
-          authorized: false,
           reason,
           canSwitchToSymlink: false,
           currentMode: config.environmentManagement.mode,
@@ -391,7 +390,7 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
         environmentListeners.forEach((listener) => listener(summary));
         return summary;
       },
-      setActive: async (environment: EnvironmentKind, id: string, _authorized = false) => {
+      setActive: async (environment: EnvironmentKind, id: string) => {
         summary = {
           ...summary,
           installations: summary.installations.map((record) => ({
@@ -406,7 +405,7 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
         environmentListeners.forEach((listener) => listener(summary));
         return summary;
       },
-      uninstall: async (id: string, _authorized = false) => {
+      uninstall: async (id: string) => {
         summary = {
           ...summary,
           installations: summary.installations.filter((record) => record.id !== id),
@@ -426,7 +425,7 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
         persistMockTasks();
         return tasks;
       },
-      createInstall: async (input: InstallTaskInput, _authorized = false) => {
+      createInstall: async (input: InstallTaskInput) => {
         return createMockInstallTask(input);
       },
       cancel: async (id: string) => {
@@ -445,7 +444,7 @@ export function createMockApi(): NonNullable<typeof window.envManager> {
         });
         return tasks.find((item) => item.id === id);
       },
-      retry: async (id: string, _authorized = false) => {
+      retry: async (id: string) => {
         const taskIndex = tasks.findIndex((item) => item.id === id);
 
         if (taskIndex === -1) {

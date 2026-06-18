@@ -39,10 +39,10 @@ export const tauriApi = {
     getSummary: () => invoke<EnvironmentSummary>("environments_get_summary"),
     discover: () => invoke<DiscoveredEnvironment[]>("environments_discover"),
     adopt: (inputs: AdoptEnvironmentInput[]) => invoke<EnvironmentSummary>("environments_adopt", { inputs }),
-    setActive: (environment: EnvironmentKind, id: string, authorized = false) =>
-      invoke<EnvironmentSummary>("environments_set_active", { environment, id, authorized }),
-    uninstall: (id: string, authorized = false) =>
-      invoke<EnvironmentSummary>("environments_uninstall", { id, authorized }),
+    setActive: (environment: EnvironmentKind, id: string) =>
+      invoke<EnvironmentSummary>("environments_set_active", { environment, id }),
+    uninstall: (id: string) =>
+      invoke<EnvironmentSummary>("environments_uninstall", { id }),
     onChanged: (callback: (summary: EnvironmentSummary) => void): (() => void) => {
       let unlisten: UnlistenFn | undefined;
       let isCancelled = false;
@@ -65,10 +65,10 @@ export const tauriApi = {
   },
   tasks: {
     list: () => invoke<ManagedTask[]>("tasks_list"),
-    createInstall: (input: InstallTaskInput, authorized = false) =>
-      invoke<ManagedTask>("tasks_create_install", { input, authorized }),
+    createInstall: (input: InstallTaskInput) =>
+      invoke<ManagedTask>("tasks_create_install", { input }),
     cancel: (id: string) => invoke<ManagedTask | null>("tasks_cancel", { id }),
-    retry: (id: string, authorized = false) => invoke<ManagedTask>("tasks_retry", { id, authorized }),
+    retry: (id: string) => invoke<ManagedTask>("tasks_retry", { id }),
     remove: (id: string) => invoke<ManagedTask[]>("tasks_remove", { id }),
     clearFinished: () => invoke<ManagedTask[]>("tasks_clear_finished"),
     onChanged: (callback: (tasks: ManagedTask[]) => void): (() => void) => {
